@@ -26,7 +26,7 @@ Every bill is also a real PDF (`/bill/<token>.pdf`, generated on the server, no 
 The customer site counts one anonymous visit per browser session: no cookies, no IP stored (only a per-day hash to estimate unique visitors). Bots and the logged-in driver are ignored. Analytics shows visits, unique visitors, visits per day, traffic sources (direct / WhatsApp / Google / …), devices and the share of visitors who booked. Put `?src=card` (any word) on the link in a QR code or printed card to see it as its own source.
 
 ## Location picker
-Customers can type a place or tap **Map** next to pickup/drop: search a place, tap the map, or use their current location. The driver gets **Pickup / Drop / Route** buttons on each ride that open Google Maps (or the phone's maps app) at the exact pin. Uses OpenStreetMap + Leaflet (bundled in `public/vendor`), no API key. Set `MAP_CENTER=lat,lng` (default Kochi) and `COUNTRY_ISO` (default `in`).
+Customers can type a place or tap **Map** next to pickup/drop: type a place and pick from live suggestions (Photon, with Nominatim as backup), tap the map, or use their current location. The driver gets **Pickup / Drop / Route** buttons on each ride that open Google Maps (or the phone's maps app) at the exact pin. Uses OpenStreetMap + Leaflet (bundled in `public/vendor`), no API key. Set `MAP_CENTER=lat,lng` (default Kochi) and `COUNTRY_ISO` (default `in`).
 
 ## Configuration (env vars, see `config.js`)
 `BUSINESS_NAME, DRIVER_NAME, DRIVER_PHONE, DRIVER_WHATSAPP, DRIVER_ADDRESS, VEHICLE, CAB_NUMBER, RATE_PER_KM, BASE_FARE, TAX_PERCENT, CURRENCY, TIMEZONE, BASE_URL, PORT, DATA_DIR`

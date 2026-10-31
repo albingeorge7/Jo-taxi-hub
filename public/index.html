@@ -8,7 +8,7 @@
 <title>JO Taxi Cab – Book a Ride</title>
 <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
-<link rel="stylesheet" href="/style.css?v=6">
+<link rel="stylesheet" href="/style.css?v=7">
 </head>
 <body>
 <header class="site"><div class="wrap">
@@ -104,7 +104,7 @@
 
 <dialog id="mapDlg">
   <div class="map-head"><h3 id="mapTitle">Choose location</h3><button type="button" class="btn sm sec" id="mapClose"><svg class="ic"><use href="/img/icons.svg#x"/></svg>Close</button></div>
-  <form id="mapSearch" class="map-search"><input id="mapQ" placeholder="Search a place, area or landmark" autocomplete="off"><button class="btn navy sm"><svg class="ic"><use href="/img/icons.svg#search"/></svg>Search</button></form>
+  <form id="mapSearch" class="map-search"><span class="field"><svg class="ic"><use href="/img/icons.svg#search"/></svg><input id="mapQ" type="search" placeholder="Start typing a place, area or landmark" autocomplete="off" autocapitalize="words" enterkeyhint="search"></span></form>
   <ul id="mapResults" class="map-results hidden"></ul>
   <button type="button" class="btn sec sm" id="mapLocate" style="margin:8px 0"><svg class="ic"><use href="/img/icons.svg#pin"/></svg>Use my current location</button>
   <div id="map"></div>
@@ -126,6 +126,6 @@
   <div style="opacity:.6" id="foot-copy"></div>
 </footer>
 <a class="fab hidden" id="wa" href="#" target="_blank" rel="noopener"><svg class="ic"><use href="/img/icons.svg#whatsapp"/></svg>WhatsApp</a>
-<script src="/app.js?v=6"></script>
+<script src="/app.js?v=7"></script>
 </body>
 </html>

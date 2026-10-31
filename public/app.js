@@ -113,7 +113,7 @@ async function pinFromMap(lat, lng) {
 async function openPicker(which) {
   picking = which; picked = null;
   $('#mapTitle').textContent = which === 'pickup' ? 'Choose pickup location' : 'Choose drop location';
-  $('#mapOk').disabled = true; $('#mapPicked').textContent = 'Tap the map to drop a pin, or search above.'; $('#mapResults').classList.add('hidden'); $('#mapQ').value = '';
+  $('#mapOk').disabled = true; $('#mapPicked').textContent = 'Tap the map to drop a pin, or search above.'; renderSuggestions([]); $('#mapQ').value = '';
   $('#mapDlg').showModal();
   try { await initMap(); } catch { $('#mapPicked').textContent = 'Could not load the map. Please type the address instead.'; return; }
   if (marker) { marker.remove(); marker = null; }
@@ -132,16 +132,61 @@ $('#mapOk').onclick = () => {
 document.querySelectorAll('input[data-loc]').forEach((inp) => inp.addEventListener('input', () => {
   const w = inp.dataset.loc; bookForm[w + '_lat'].value = ''; bookForm[w + '_lng'].value = ''; document.querySelector(`[data-pinned=${w}]`).classList.add('hidden');
 }));
-$('#mapSearch').addEventListener('submit', async (e) => {
-  e.preventDefault(); const q = $('#mapQ').value.trim(), ul = $('#mapResults'); if (!q) return;
-  ul.innerHTML = '<li>Searching…</li>'; ul.classList.remove('hidden');
+// ---------- place suggestions while typing (Photon = OpenStreetMap search built for autocomplete) ----------
+let sugTimer, sugAbort, sugSeq = 0, sugItems = [];
+const sugUl = () => $('#mapResults');
+function photonItem(f) {
+  const p = f.properties || {}, street = p.street ? `${p.housenumber ? p.housenumber + ' ' : ''}${p.street}` : '';
+  const title = p.name || street || p.city || p.state || 'Unnamed place';
+  const rest = [...new Set([street, p.district || p.locality, p.city || p.county, p.state].filter((x) => x && x !== title))].slice(0, 3).join(', ');
+  return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], title, sub: rest, label: [title, rest].filter(Boolean).join(', ') };
+}
+async function fetchSuggestions(q, signal) {
+  const iso = (info?.countryIso || 'in').toUpperCase(), c = map ? map.getCenter() : { lat: info?.mapCenter?.[0] ?? 9.9312, lng: info?.mapCenter?.[1] ?? 76.2673 };
   try {
-    const res = await nominatim(`search?q=${encodeURIComponent(q)}&limit=6&countrycodes=${info?.countryIso || 'in'}`);
-    ul.innerHTML = '';
-    if (!res.length) ul.innerHTML = '<li>No places found. Try a nearby landmark or drop a pin on the map.</li>';
-    res.forEach((r) => { const li = document.createElement('li'); li.textContent = shortName(r.display_name); li.onclick = () => { ul.classList.add('hidden'); setPin(+r.lat, +r.lon, shortName(r.display_name)); }; ul.append(li); });
-  } catch (err) { ul.innerHTML = `<li>${esc(err.message)}. You can still tap the map.</li>`; }
+    const r = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=8&lang=en&lat=${c.lat.toFixed(4)}&lon=${c.lng.toFixed(4)}`, { signal });
+    if (!r.ok) throw new Error('photon ' + r.status);
+    const j = await r.json();
+    return (j.features || []).filter((f) => (f.properties?.countrycode || '').toUpperCase() === iso).map(photonItem).slice(0, 6);
+  } catch (e) {
+    if (e.name === 'AbortError') throw e;
+    // backup: Nominatim (only used if Photon is down)
+    const res = await nominatim(`search?q=${encodeURIComponent(q)}&limit=6&countrycodes=${iso.toLowerCase()}`);
+    return res.map((r) => ({ lat: +r.lat, lon: +r.lon, title: shortName(r.display_name).split(',')[0], sub: shortName(r.display_name).split(',').slice(1).join(',').trim(), label: shortName(r.display_name) }));
+  }
+}
+function renderSuggestions(items, msg) {
+  const ul = sugUl(); ul.innerHTML = ''; sugItems = items || [];
+  if (msg) { const li = document.createElement('li'); li.className = 'note'; li.textContent = msg; ul.append(li); }
+  (items || []).forEach((it) => {
+    const li = document.createElement('li'), t = document.createElement('span'), s = document.createElement('span');
+    t.className = 't'; t.textContent = it.title; s.className = 's'; s.textContent = it.sub; li.append(t, s);
+    li.onclick = () => chooseSuggestion(it); ul.append(li);
+  });
+  ul.classList.toggle('hidden', !ul.children.length);
+}
+function chooseSuggestion(it) {
+  sugAbort?.abort(); clearTimeout(sugTimer); sugUl().classList.add('hidden');
+  $('#mapQ').value = it.title; setPin(it.lat, it.lon, it.label); $('#mapQ').blur();
+}
+async function runSuggest(q) {
+  const seq = ++sugSeq; sugAbort?.abort(); sugAbort = new AbortController();
+  renderSuggestions([], 'Searching…');
+  try {
+    const items = await fetchSuggestions(q, sugAbort.signal);
+    if (seq === sugSeq) renderSuggestions(items, items.length ? '' : 'No places found. Try a nearby landmark, or tap the map to drop a pin.');
+  } catch (e) { if (e.name !== 'AbortError' && seq === sugSeq) renderSuggestions([], 'Search is unavailable right now. You can still tap the map to drop a pin.'); }
+}
+$('#mapQ').addEventListener('input', () => {
+  clearTimeout(sugTimer); const q = $('#mapQ').value.trim();
+  if (q.length < 3) { sugSeq++; sugAbort?.abort(); renderSuggestions([]); return; }
+  sugTimer = setTimeout(() => runSuggest(q), 350);
 });
+$('#mapSearch').addEventListener('submit', (e) => {   // Enter key: take the top suggestion, or search right away
+  e.preventDefault(); const q = $('#mapQ').value.trim(); clearTimeout(sugTimer);
+  if (sugItems.length) chooseSuggestion(sugItems[0]); else if (q.length >= 3) runSuggest(q);
+});
+
 // ---------- "use my current location" with a clear popup when it cannot work ----------
 const platform = /iphone|ipad|ipod/i.test(navigator.userAgent) ? 'ios' : /android/i.test(navigator.userAgent) ? 'android' : 'desktop';
 const LOC_HELP = {

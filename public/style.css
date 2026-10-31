@@ -125,3 +125,8 @@ footer a{color:#fff;text-decoration:none}footer .links{display:flex;flex-wrap:wr
 
 #locDlg{border:0;border-radius:16px;padding:20px;width:min(440px,92vw);box-shadow:0 24px 60px rgba(0,0,0,.4)}#locDlg::backdrop{background:rgba(11,31,74,.6)}
 #locDlg p{margin:0 0 10px;font-size:15px}#locDlg .muted{color:var(--muted);font-size:13.5px}
+
+.map-search .field{flex:1;margin:0}.map-search input{padding-left:38px}
+.map-results li{display:block}.map-results .t{display:block;font-weight:600;color:var(--navy);font-size:14.5px}.map-results .s{display:block;color:var(--muted);font-size:12.5px}
+.map-results li.note{color:var(--muted);cursor:default;font-size:13.5px}.map-results li.note:hover{background:none}
+.map-results{max-height:210px}
