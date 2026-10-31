@@ -11,9 +11,32 @@ export const upiLink = (bill) => `upi://pay?${upiQuery(bill)}`;
 // App-specific links go straight to that app, so the customer is not sent to whichever app grabbed upi:// (often WhatsApp Pay).
 export const upiAppLinks = (bill) => [['Google Pay', `tez://upi/pay?${upiQuery(bill)}`], ['PhonePe', `phonepe://pay?${upiQuery(bill)}`], ['Paytm', `paytmmp://pay?${upiQuery(bill)}`]];
 
+// WhatsApp message: short labelled sections, *bold* headings, each link on its own line so it stays tappable.
 export function billMessage(bill, booking, link) {
-  const trip = booking.pickup === '—' && booking.dropoff === '—' ? '' : ` for your trip ${booking.pickup} → ${booking.dropoff}`;
-  return `Hello ${booking.name},\n\nThank you for riding with ${config.business.name}.\nBill ${bill.number}${trip}: total ${money(bill.total)}.${needsPayment(bill) ? `\n\nPay ${money(bill.total)} now (tap to open your UPI app): ${link.replace('/bill/', '/pay/')}` : ''}\n\nView / print your bill: ${link}\nPDF: ${link}.pdf\n\n${config.business.driverName}, ${config.business.phone}`;
+  const hasTrip = !(booking.pickup === '—' && booking.dropoff === '—');
+  const pay = needsPayment(bill);
+  const paidBy = !pay && bill.payment_method ? `${bill.payment_method} (paid)` : '';
+  const lines = [
+    `🚖 *${config.business.name}*`,
+    '',
+    `Hello ${booking.name}, thank you for riding with us! 🙏`,
+    '',
+    `🧾 *Bill ${bill.number}*`,
+    ...(hasTrip ? [`📍 ${booking.pickup} → ${booking.dropoff}`] : []),
+    `💰 *Total: ${money(bill.total)}*`,
+    ...(paidBy ? [`✅ ${paidBy}`] : []),
+    ...(pay ? ['', '💳 *Pay now* (opens your UPI app)', link.replace('/bill/', '/pay/')] : []),
+    '',
+    '📄 *View bill*',
+    link,
+    '',
+    '📎 *Download PDF*',
+    `${link}.pdf`,
+    '',
+    `— ${config.business.driverName}`,
+    `📞 ${config.business.phone}`,
+  ];
+  return lines.join('\n');
 }
 
 export function renderBill(bill, booking) {
