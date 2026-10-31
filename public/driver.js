@@ -92,7 +92,7 @@ const statTile = (icon, v, l, c = '') => `<div class="card stat ${c}"><div class
 function renderRequests() {
   const pend = bookings.filter((b) => b.status === 'pending').sort((a, b) => a.pickup_at.localeCompare(b.pickup_at));
   const t = stats.totals;
-  $('#tab-requests').innerHTML = `<div class="stats">${statTile('bell', t.pending, 'Awaiting reply')}${statTile('car', t.todayRides, 'Rides today', 'b')}${statTile('rupee', money(t.revenueToday), 'Earned today', 'g')}${statTile('eye', t.visitsToday, 'Site visits today')}</div>
+  $('#tab-requests').innerHTML = `<div class="stats">${statTile('bell', t.pending, 'Awaiting reply')}${statTile('car', t.todayRides, 'Rides today', 'b')}${statTile('rupee', money(t.revenueToday), 'Earned today', 'g')}${statTile('eye', t.visitsToday, 'Site visits today')}${statTile('users', t.visitorsToday, 'Visitors today', 'b')}</div>
     <h2 class="sec">${ic('bell')}New booking requests</h2>${pend.map((b) => rideCard(b)).join('') || '<p class="muted">No pending requests. You will be alerted here the moment someone books.</p>'}`;
 }
 
@@ -167,7 +167,7 @@ function renderAnalytics() {
   </div>
   <div class="stats">${statTile('rupee', money(t.revenue), 'Revenue')}${statTile('car', t.completed, 'Completed rides', 'b')}${statTile('list', t.bookings, 'Total bookings', 'b')}
     ${statTile('receipt', money(t.avgFare), 'Average fare')}${statTile('check', (t.completionRate ?? '–') + (t.completionRate != null ? '%' : ''), 'Completion rate', 'g')}${statTile('users', t.repeatCustomers, 'Repeat customers', 'g')}
-    ${statTile('eye', t.visits, 'Site visits')}${statTile('users', t.visitors, 'Unique visitors', 'b')}${statTile('trend', (t.conversion ?? '–') + (t.conversion != null ? '%' : ''), 'Visitors who booked', 'g')}</div>
+    ${statTile('eye', t.visits, 'Site visits')}${statTile('users', t.visitors, 'Unique visitors', 'b')}${statTile('trend', t.returningVisitors, 'Returning visitors', 'g')}${statTile('trend', (t.conversion ?? '–') + (t.conversion != null ? '%' : ''), 'Visitors who booked', 'g')}</div>
   ${chart('rupee', `Revenue ${per}`, `<div class="bars">${d.map((x) => `<div title="${x.date}: ${money(x.revenue)}" style="height:${x.revenue / maxRev * 100}%"></div>`).join('')}</div>`, d[0].date, d[d.length - 1].date)}
   ${chart('bell', `New booking requests ${per}`, `<div class="bars">${d.map((x) => `<div class="b2" title="${x.date}: ${x.bookings}" style="height:${x.bookings / maxBk * 100}%"></div>`).join('')}</div>`, d[0].date, d[d.length - 1].date)}
   ${chart('eye', `Site visits ${per}`, `<div class="bars">${d.map((x) => `<div class="b2" title="${x.date}: ${x.visits} visits, ${x.visitors} visitors" style="height:${x.visits / maxVis * 100}%"></div>`).join('')}</div>`, d[0].date, d[d.length - 1].date)}

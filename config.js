@@ -16,7 +16,7 @@ export default {
     phone: env.DRIVER_PHONE || '+91 94965 20184',
     whatsapp: env.DRIVER_WHATSAPP || '919645599184', // digits only, country code first
     email: env.DRIVER_EMAIL || 'jojojosemangalan@gmail.com',
-    address: env.DRIVER_ADDRESS || 'Cochin, Kerala',
+    address: env.DRIVER_ADDRESS || 'Angamaly, Kerala',
     vehicle: env.VEHICLE || 'All types of vehicles available',
     licence: env.CAB_NUMBER || '',
     hours: env.HOURS || '24/7 service (advance booking recommended)',

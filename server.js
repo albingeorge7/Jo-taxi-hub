@@ -253,7 +253,10 @@ async function api(req, res, url) {
     const ua = String(req.headers['user-agent'] || '');
     if (!isDriver(req) && ua && !/bot|crawl|spider|slurp|preview|monitor|uptime|curl|wget|python|headless|lighthouse/i.test(ua)) {
       const day = todayKey();
-      const vh = crypto.createHmac('sha256', SALT).update(`${day}|${clientIp(req)}|${ua}`).digest('hex').slice(0, 24);
+      // Preferred: a random id the visitor's browser generated for itself (stable, so a person counts once however
+      // many networks/days). Fallback when storage is blocked: per-day fingerprint of IP + browser (shared IPs merge people).
+      const vid = /^[a-f0-9]{16,64}$/.test(String(v.vid || '')) ? v.vid : '';
+      const vh = crypto.createHmac('sha256', SALT).update(vid ? `id|${vid}` : `fp|${day}|${clientIp(req)}|${ua}`).digest('hex').slice(0, 24);
       db.prepare('INSERT INTO visits (day,vh,source,device) VALUES (?,?,?,?)')
         .run(day, vh, visitSource(clean(v.ref, 300), clean(v.src, 30), req.headers.host), /ipad|tablet/i.test(ua) ? 'tablet' : /mobi|android|iphone/i.test(ua) ? 'mobile' : 'desktop');
     }
@@ -450,6 +453,7 @@ function stats(query = {}) {
     todayRides: all.filter((b) => b.day === today && ['confirmed', 'completed'].includes(b.status)).length,
     revenueToday: revenue(done.filter((b) => b.day === today)),
     visitsToday: db.prepare('SELECT COUNT(*) c FROM visits WHERE day=?').get(today).c,
+    visitorsToday: db.prepare('SELECT COUNT(DISTINCT vh) c FROM visits WHERE day=?').get(today).c,
   };
 
   // numbers for the selected date range (by ride date; request volume by the date it was made)
@@ -465,9 +469,12 @@ function stats(query = {}) {
     if (b.source === 'web' && b.created >= range.from && b.created <= range.to) series[bucket(b.created)].bookings++;
     if (b.status === 'completed' && b.day >= range.from && b.day <= range.to) { const e = series[bucket(b.day)]; e.rides++; e.revenue = round2(e.revenue + (b.fare || 0)); }
   }
-  const vrows = db.prepare('SELECT day, COUNT(*) v, COUNT(DISTINCT vh) u FROM visits WHERE day BETWEEN ? AND ? GROUP BY day').all(range.from, range.to);
-  for (const r of vrows) { const e = series[bucket(r.day)]; e.visits += r.v; e.visitors += r.u; }
-  const visitsTotal = vrows.reduce((a, r) => a + r.v, 0), visitorsTotal = vrows.reduce((a, r) => a + r.u, 0);
+  const vSeries = db.prepare(`SELECT ${monthly ? 'substr(day,1,7)' : 'day'} AS k, COUNT(*) v, COUNT(DISTINCT vh) u FROM visits WHERE day BETWEEN ? AND ? GROUP BY k`).all(range.from, range.to);
+  for (const r of vSeries) { const e = series[r.k]; if (e) { e.visits = r.v; e.visitors = r.u; } }
+  const vTot = db.prepare('SELECT COUNT(*) v, COUNT(DISTINCT vh) u FROM visits WHERE day BETWEEN ? AND ?').get(range.from, range.to);
+  const visitsTotal = vTot.v, visitorsTotal = vTot.u;   // visitors = distinct people over the whole range, not a sum of daily counts
+  // visitors in this range who have visited on more than one day (ever)
+  const returningVisitors = db.prepare('SELECT COUNT(*) c FROM (SELECT vh FROM visits WHERE vh IN (SELECT vh FROM visits WHERE day BETWEEN ? AND ?) GROUP BY vh HAVING COUNT(DISTINCT day) > 1)').get(range.from, range.to).c;
   const group = (col) => db.prepare(`SELECT ${col} AS label, COUNT(*) n FROM visits WHERE day BETWEEN ? AND ? GROUP BY ${col} ORDER BY n DESC LIMIT 8`).all(range.from, range.to);
   const webBookings = all.filter((b) => b.source === 'web' && b.created >= range.from && b.created <= range.to).length;
   const hours = Array(24).fill(0);
@@ -488,7 +495,7 @@ function stats(query = {}) {
         avgFare: rdone.length ? round2(revenue(rdone) / rdone.length) : 0,
         completionRate: decided ? Math.round(byStatus.completed / decided * 100) : null,
         repeatCustomers: Object.values(customers).filter((n) => n > 1).length,
-        visits: visitsTotal, visitors: visitorsTotal, webBookings,
+        visits: visitsTotal, visitors: visitorsTotal, returningVisitors, webBookings,
         conversion: visitorsTotal ? Math.round(webBookings / visitorsTotal * 1000) / 10 : null,
       },
       sources: group('source'), devices: group('device'),

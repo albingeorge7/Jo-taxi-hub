@@ -82,7 +82,7 @@ assert.ok(bill.data.whatsapp.includes(encodeURIComponent('.pdf')), 'WhatsApp mes
 assert.equal((await fetch(base + '/bill/' + 'a'.repeat(32) + '.pdf')).status, 404);
 
 // visit counter: anonymous, de-duplicated per day, ignores bots and the driver
-const visit = (body, ua, ck) => j('/api/visit', 'POST', body, ck, { 'User-Agent': ua, 'CF-Connecting-IP': '8.8.8.8' });
+const visit = (body, ua, ck, ip = '8.8.8.8') => j('/api/visit', 'POST', body, ck, { 'User-Agent': ua, 'CF-Connecting-IP': ip });
 const phoneUa = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) Mobile Safari/604.1';
 assert.equal((await visit({ ref: 'https://wa.me/x', src: '' }, phoneUa)).status, 204);
 assert.equal((await visit({ ref: '', src: 'Card!' }, phoneUa)).status, 204);
@@ -174,4 +174,14 @@ assert.equal((await j('/api/driver/bookings?preset=custom&from=bad&to=2026-01-01
 const appJs = await (await fetch(base + '/app.js')).text();
 assert.ok(appJs.includes("fetch('/api/visit'") && appJs.includes("sessionStorage.getItem('visited')"), 'app.js sends the visit counter request');
 assert.ok((await (await fetch(base + '/')).text()).includes('/app.js'), 'home page loads app.js');
+// unique visitors come from a per-device random id: many people behind one IP with identical browsers stay distinct
+const hexId = (n) => n.toString(16).padStart(32, '0');
+for (const n of [1, 2, 3]) await visit({ vid: hexId(n) }, phoneUa, undefined, '10.10.10.10');   // same IP + same browser, 3 people
+await visit({ vid: hexId(1) }, phoneUa, undefined, '10.10.10.10');                                   // person 1 again (new session)
+await visit({ vid: 'not-a-valid-id' }, phoneUa, undefined, '10.10.10.11');                           // bad id falls back to fingerprint
+const vs2 = (await j('/api/driver/stats', 'GET', null, ck2)).data;
+assert.equal(vs2.range.totals.visits, 2 + 5, 'every session is a visit');
+assert.equal(vs2.range.totals.visitors, 1 + 3 + 1, 'distinct people: earlier fallback visitor + 3 ids + 1 fallback');
+assert.equal(vs2.totals.visitorsToday, vs2.range.totals.visitors);
+assert.ok(vs2.range.daily.reduce((a, d) => a + d.visitors, 0) >= vs2.range.totals.visitors - 0, 'daily buckets present');
 console.log('All tests passed'); process.exit(0);

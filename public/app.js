@@ -38,7 +38,6 @@ const setLogo = (el, name) => { const [first, ...rest] = name.trim().split(/\s+/
   if (info.licence) cards.push(['shield', 'Cab number', esc(info.licence)]);
   $('#details').innerHTML = cards.map(([i, h, v], n) => `<div class="card icon-card${n % 2 ? ' blue' : ''}"><div class="ico">${ic(i)}</div><div><h3>${h}</h3><p>${v}</p></div></div>`).join('');
   $('#areas').innerHTML = info.areas.map((a) => `<div class="card svc"><div class="ico">${ic(svcIcon(a))}</div><h3>${esc(a.trim())}</h3></div>`).join('');
-  $('#rates').textContent = `Base ${info.currency}${info.baseFare} + ${info.currency}${info.ratePerKm}/km. Final fare is confirmed by the driver.`;
   const links = [`<a href="${tel}">${ic('phone')} ${esc(info.phone)}</a>`];
   if (info.email) links.push(`<a href="mailto:${esc(info.email)}">${ic('mail')} ${esc(info.email)}</a>`);
   links.push(`<a target="_blank" rel="noopener" href="${maps}">${ic('pin')} ${esc(info.address)}</a>`);
@@ -225,11 +224,13 @@ $('#mapLocate').onclick = locate;
 $('#locClose').onclick = () => $('#locDlg').close();
 $('#locRetry').onclick = () => { $('#locDlg').close(); locate(); };
 
-// anonymous visit counter: once per browser session (no cookies, no personal data)
+// anonymous visit counter: once per browser session. A random id kept on this device (no cookie, nothing personal)
+// lets the driver see how many different people visit, instead of guessing from shared network addresses.
 try {
   if (!sessionStorage.getItem('visited')) {
     sessionStorage.setItem('visited', '1');
+    let vid = ''; try { vid = localStorage.getItem('vid') || ''; if (!/^[a-f0-9]{32}$/.test(vid)) { vid = [...crypto.getRandomValues(new Uint8Array(16))].map((x) => x.toString(16).padStart(2, '0')).join(''); localStorage.setItem('vid', vid); } } catch { vid = ''; }
     fetch('/api/visit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
-      body: JSON.stringify({ ref: document.referrer, src: new URLSearchParams(location.search).get('src') || '' }) }).catch(() => {});
+      body: JSON.stringify({ ref: document.referrer, src: new URLSearchParams(location.search).get('src') || '', vid }) }).catch(() => {});
   }
 } catch { /* storage blocked: skip counting */ }
