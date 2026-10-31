@@ -57,6 +57,8 @@ const payUrl = msg.match(/https?:\/\/\S+\/pay\/[a-f0-9]{32}/)?.[0];
 assert.ok(payUrl && !msg.includes('okaxis'), 'WhatsApp message has a tappable https pay link, not the raw UPI id');
 const payHtml = await (await fetch(payUrl.replace(/^https?:\/\/[^/]+/, base))).text();
 assert.ok(payHtml.includes('upi://pay?pa=jojojosemangalan-1@okaxis&amp;pn=') && payHtml.includes('am=199.50'), 'pay page opens the UPI app with the amount');
+for (const scheme of ['tez://upi/pay?pa=', 'phonepe://pay?pa=', 'paytmmp://pay?pa=']) assert.ok(payHtml.includes(scheme), 'app button ' + scheme);
+assert.ok(!payHtml.includes('<script'), 'no automatic redirect to the generic upi:// link');
 const paid = await j('/api/driver/bills', 'POST', { customer: { name: 'Cash Cust', pickup: 'A', dropoff: 'B', phone: '9847011133' }, items: [{ description: 'Fare', qty: 1, rate: 100 }], payment_method: 'Cash' }, cookie);
 assert.ok(!decodeURIComponent(paid.data.whatsapp).includes('/pay/'), 'no pay link on cash bills');
 assert.ok(!(await (await fetch(paid.data.link.replace(/^https?:\/\/[^/]+/, base).replace('/bill/', '/pay/'))).text()).includes('upi://pay'), 'pay page of a cash bill has no UPI link');

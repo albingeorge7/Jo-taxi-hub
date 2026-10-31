@@ -6,7 +6,10 @@ const when = (iso, opts = { dateStyle: 'medium', timeStyle: 'short' }) => new Da
 
 // Cash / card bills are already paid; anything else shows the UPI payment option.
 export const needsPayment = (bill) => !!config.upi.id && !['cash', 'card'].includes(String(bill.payment_method || '').toLowerCase());
-export const upiLink = (bill) => `upi://pay?pa=${encodeURIComponent(config.upi.id).replace(/%40/g, '@')}&pn=${encodeURIComponent(config.upi.name)}&am=${Number(bill.total).toFixed(2)}&cu=INR&tn=${encodeURIComponent('Bill ' + bill.number)}`;
+const upiQuery = (bill) => `pa=${encodeURIComponent(config.upi.id).replace(/%40/g, '@')}&pn=${encodeURIComponent(config.upi.name)}&am=${Number(bill.total).toFixed(2)}&cu=INR&tn=${encodeURIComponent('Bill ' + bill.number)}`;
+export const upiLink = (bill) => `upi://pay?${upiQuery(bill)}`;
+// App-specific links go straight to that app, so the customer is not sent to whichever app grabbed upi:// (often WhatsApp Pay).
+export const upiAppLinks = (bill) => [['Google Pay', `tez://upi/pay?${upiQuery(bill)}`], ['PhonePe', `phonepe://pay?${upiQuery(bill)}`], ['Paytm', `paytmmp://pay?${upiQuery(bill)}`]];
 
 export function billMessage(bill, booking, link) {
   const trip = booking.pickup === '—' && booking.dropoff === '—' ? '' : ` for your trip ${booking.pickup} → ${booking.dropoff}`;
@@ -51,13 +54,14 @@ export function renderPayPage(bill, booking) {
 <style>body{font-family:system-ui,Segoe UI,Arial,sans-serif;background:#f3f4f6;margin:0;padding:16px;color:#111827}
 .box{max-width:420px;margin:40px auto;background:#fff;border-radius:16px;padding:28px 24px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,.08)}
 h1{margin:0 0 4px;font-size:20px;color:#12306b}.amt{font-size:34px;font-weight:800;margin:14px 0 4px}.muted{color:#6b7280;font-size:14px}
-a.btn{display:block;margin:18px 0 8px;padding:15px;background:#16a34a;color:#fff;border-radius:12px;font-size:17px;font-weight:700;text-decoration:none}
-a.sec{display:block;margin-top:14px;color:#12306b;font-size:14px}</style></head><body><div class="box">
+a.btn{display:block;margin:10px 0;padding:15px;background:#16a34a;color:#fff;border-radius:12px;font-size:17px;font-weight:700;text-decoration:none}
+a.sec{display:block;margin-top:14px;color:#12306b;font-size:14px}a.btn.alt{background:#fff;color:#12306b;border:1px solid #cbd5e1}</style></head><body><div class="box">
 <h1>${esc(b.name)}</h1><div class="muted">Bill ${esc(bill.number)}</div>
 ${due ? `<div class="amt">${money(bill.total)}</div>
-<a class="btn" id="pay" href="${esc(upiLink(bill))}">Pay with UPI app</a>
-<div class="muted">Opens GPay, PhonePe, Paytm or any UPI app with the amount filled in.<br>If nothing opens, use this link on your phone.</div>
-<script>setTimeout(function(){location.href=document.getElementById('pay').href},400)</script>`
+<div class="muted" style="margin-top:6px">Choose your payment app</div>
+${upiAppLinks(bill).map(([n, u]) => `<a class="btn" href="${esc(u)}">${n}</a>`).join('')}
+<a class="btn alt" href="${esc(upiLink(bill))}">Other UPI app</a>
+<div class="muted">The amount is filled in for you. If nothing opens, tap the menu and choose <b>Open in browser</b> (Chrome or Safari), then try again.</div>`
  : `<div class="amt">Paid</div><div class="muted">This bill is already marked as paid (${esc(bill.payment_method || '')}). No payment is needed.</div>`}
 <a class="sec" href="/bill/${esc(bill.token)}">View bill</a></div></body></html>`;
 }
