@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
 <title>Driver Dashboard</title>
-<link rel="stylesheet" href="/style.css?v=9">
+<link rel="stylesheet" href="/style.css?v=10">
 <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/driver.css?v=9">
+<link rel="stylesheet" href="/driver.css?v=10">
 </head>
 <body class="driver">
 <header class="dh"><div class="wrap"><div class="brand"><span class="logo"><span class="logo-jo">JO</span><span class="logo-t">Taxi Cab</span></span><small>Driver</small></div><nav><span id="conn" title="Live alert connection"></span><a href="#" id="logout" class="hidden"><svg class="ic"><use href="/img/icons.svg#logout"/></svg>Logout</a></nav></div></header>
@@ -51,13 +51,19 @@
 
     <div class="seg" id="modeSeg"><button type="button" data-mode="km" class="on"><svg class="ic"><use href="/img/icons.svg#route"/></svg>Per km + extras</button><button type="button" data-mode="fixed"><svg class="ic"><use href="/img/icons.svg#rupee"/></svg>Fixed amount</button></div>
 
-    <div id="modeKm">
+    <div id="kmRates">
       <div class="row">
-        <label>Distance (km)<input name="km" type="number" min="0" step="any" inputmode="decimal"></label>
         <label>Rate per km<input name="rate" type="number" min="0" step="any" inputmode="decimal"></label>
+        <label>Base / minimum fare <span class="muted">(optional)</span><input name="base" type="number" min="0" step="any" inputmode="decimal"></label>
       </div>
-      <label>Base / minimum fare <span class="muted">(optional)</span><input name="base" type="number" min="0" step="any" inputmode="decimal"></label>
-      <div class="muted" style="font-size:13px;margin-bottom:6px">Extras (toll, parking, waiting…)</div>
+    </div>
+
+    <div class="muted" style="font-size:13px;margin:2px 0 6px">Trip legs <span style="opacity:.8">&mdash; add a leg for each part of the trip (e.g. a return to the pickup point)</span></div>
+    <div id="legs"></div>
+    <div class="actions" style="margin:8px 0 14px"><button type="button" class="btn sm sec" id="addLeg"><svg class="ic"><use href="/img/icons.svg#plus"/></svg>Add leg</button><button type="button" class="btn sm sec" id="addReturn"><svg class="ic"><use href="/img/icons.svg#route"/></svg>Add return leg</button></div>
+
+    <div id="modeKm">
+      <div class="muted" style="font-size:13px;margin-bottom:6px">Extras (toll, parking, waiting&hellip;)</div>
       <table class="items"><tbody id="extraRows"></tbody></table>
       <div class="chips" style="margin:8px 0 14px">
         <button type="button" class="chip" data-extra="Toll">+ Toll</button><button type="button" class="chip" data-extra="Parking">+ Parking</button>
@@ -65,10 +71,6 @@
       </div>
     </div>
     <div id="modeFixed" class="hidden">
-      <div class="row">
-        <label>Description<input name="fdesc" value="Cab fare"></label>
-        <label>Amount<input name="famt" type="number" min="0" step="any" inputmode="decimal"></label>
-      </div>
       <label>Toll <span class="muted">(optional)</span><input name="ftoll" type="number" min="0" step="any" inputmode="decimal" placeholder="Added as a separate line"></label>
     </div>
 
@@ -80,6 +82,6 @@
 </dialog>
 <button class="fab-bill hidden" id="fabBill" title="Create a bill for a ride not booked on the website"><svg class="ic"><use href="/img/icons.svg#plus"/></svg><span>New bill</span></button>
 <div id="toast" class="hidden"></div>
-<script src="/driver.js?v=9"></script>
+<script src="/driver.js?v=10"></script>
 </body>
 </html>

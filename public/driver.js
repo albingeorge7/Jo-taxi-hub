@@ -171,7 +171,31 @@ let billMode = 'km';
 function extraRow(d = '', amt = '') {
   return `<tr><td style="width:55%"><input placeholder="Description" value="${esc(d)}" class="x-d"></td><td><input type="number" min="0" step="any" inputmode="decimal" value="${amt}" class="x-a" placeholder="Amount"></td><td><button type="button" class="btn sm sec rm">${ic('x')}</button></td></tr>`;
 }
+const ARROW = /\s*(?:→|->|\s+to\s+)\s*/i;
+const defaultRoute = () => {
+  if (billBooking) return `${billBooking.pickup} → ${billBooking.dropoff}`;
+  const f = $('#billForm'); return f.cpick.value && f.cdrop.value ? `${f.cpick.value.trim()} → ${f.cdrop.value.trim()}` : '';
+};
+const reverseRoute = (r) => { const p = r.split(ARROW); return p.length === 2 && p[0] && p[1] ? `${p[1].trim()} → ${p[0].trim()}` : ''; };
+function legRow(route = '', km = '', amt = '') {
+  return `<div class="leg"><div class="leg-h"><span>Leg <span class="ln"></span></span><button type="button" class="btn sm sec rmleg">${ic('x')}</button></div>
+    <input class="l-route" placeholder="From → To" value="${esc(route)}">
+    <div class="row"><label class="km-only">Distance (km)<input class="l-km" type="number" min="0" step="any" inputmode="decimal" value="${km}"></label>
+    <label class="fixed-only">Amount<input class="l-amt" type="number" min="0" step="any" inputmode="decimal" value="${amt}"></label></div></div>`;
+}
+function renumberLegs() {
+  const legs = document.querySelectorAll('#legs .leg');
+  legs.forEach((l, i) => { l.querySelector('.ln').textContent = i + 1; l.querySelector('.rmleg').classList.toggle('hidden', legs.length === 1); });
+  const first = $('#legs .l-route'); if (first) first.placeholder = defaultRoute() || 'From → To';
+}
+function addLeg(route, km, amt) { $('#legs').insertAdjacentHTML('beforeend', legRow(route, km, amt)); renumberLegs(); calc(); }
+function addReturnLeg() {
+  const last = [...document.querySelectorAll('#legs .leg')].pop();
+  const route = last ? (last.querySelector('.l-route').value.trim() || (document.querySelectorAll('#legs .leg').length === 1 ? defaultRoute() : '')) : defaultRoute();
+  addLeg(reverseRoute(route), last?.querySelector('.l-km').value || '', last?.querySelector('.l-amt').value || '');
+}
 function setMode(m) {
+  $('#billForm').dataset.mode = m;
   billMode = m;
   document.querySelectorAll('#modeSeg button').forEach((b) => b.classList.toggle('on', b.dataset.mode === m));
   $('#modeKm').classList.toggle('hidden', m !== 'km'); $('#modeFixed').classList.toggle('hidden', m !== 'fixed');
@@ -185,28 +209,35 @@ function openBill(b) { // b = booking, or null for a ride that was not booked on
   ['cname', 'cpick', 'cdrop'].forEach((n) => (f[n].required = !b));
   if (b) { $('#custSummary').innerHTML = `${ic('user')} ${esc(b.name)} &bull; ${esc(b.pickup)} &rarr; ${esc(b.dropoff)} &bull; ${esc(b.ref)}`; f.wa.value = b.phone; }
   f.rate.value = info.ratePerKm || ''; f.base.value = info.baseFare || ''; f.tax.value = info.taxPercent || 0;
-  $('#extraRows').innerHTML = '';
+  $('#extraRows').innerHTML = ''; $('#legs').innerHTML = ''; addLeg();
   $('#billMsg').innerHTML = ''; $('#billSave').classList.remove('hidden'); $('#billSave').disabled = false;
   setMode('km'); $('#billDlg').showModal();
 }
+function activeLegs() {
+  const km = billMode === 'km', n = (v) => Number(v) || 0;
+  return [...document.querySelectorAll('#legs .leg')].map((l) => ({ route: l.querySelector('.l-route').value.trim(), km: n(l.querySelector('.l-km').value), amt: n(l.querySelector('.l-amt').value) }))
+    .filter((l) => (km ? l.km > 0 : l.amt > 0));
+}
 function readItems() {
-  const f = $('#billForm'), n = (v) => Number(v) || 0, items = [];
+  const f = $('#billForm'), n = (v) => Number(v) || 0, items = [], legs = activeLegs(), rate = n(f.rate.value), multi = legs.length > 1;
+  const label = (l, i) => (multi ? `Leg ${i + 1}: ${l.route || (i === 0 ? defaultRoute() : '') || 'trip'}` : '');
   if (billMode === 'fixed') {
-    if (n(f.famt.value) > 0) items.push({ description: f.fdesc.value.trim() || 'Cab fare', qty: 1, rate: n(f.famt.value) });
+    legs.forEach((l, i) => items.push({ description: multi ? label(l, i) : l.route || 'Cab fare', qty: 1, rate: l.amt }));
     if (items.length && n(f.ftoll.value) > 0) items.push({ description: 'Toll', qty: 1, rate: n(f.ftoll.value) });
     return items;
   }
   if (n(f.base.value) > 0) items.push({ description: 'Base fare', qty: 1, rate: n(f.base.value) });
-  if (n(f.km.value) > 0 && n(f.rate.value) > 0) items.push({ description: `Distance (${n(f.km.value)} km @ ${cur}${n(f.rate.value)}/km)`, qty: n(f.km.value), rate: n(f.rate.value) });
+  if (rate > 0) legs.forEach((l, i) => items.push({ description: `${multi ? label(l, i) + ' ' : 'Distance '}(${l.km} km @ ${cur}${rate}/km)`, qty: l.km, rate }));
   document.querySelectorAll('#extraRows tr').forEach((tr) => {
-    const d = tr.querySelector('.x-d').value.trim(), a = n(tr.querySelector('.x-a').value);
-    if (d && a > 0) items.push({ description: d, qty: 1, rate: a });
+    const dsc = tr.querySelector('.x-d').value.trim(), a = n(tr.querySelector('.x-a').value);
+    if (dsc && a > 0) items.push({ description: dsc, qty: 1, rate: a });
   });
   return items;
 }
 function calc() {
   const sub = readItems().reduce((s, i) => s + i.qty * i.rate, 0), tax = Number($('#billForm').tax.value) || 0;
-  $('#billTotal').textContent = `Total: ${money(sub * (1 + tax / 100))}`;
+  const km = billMode === 'km' ? activeLegs().reduce((s, l) => s + l.km, 0) : 0;
+  $('#billTotal').textContent = `Total: ${money(sub * (1 + tax / 100))}${km ? ` · ${km} km` : ''}`;
 }
 $('#billForm').addEventListener('input', calc);
 $('#modeSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setMode(b.dataset.mode); });
@@ -215,13 +246,17 @@ $('#billDlg').addEventListener('click', (e) => {
   if (chip) { $('#extraRows').insertAdjacentHTML('beforeend', extraRow(chip.dataset.extra)); $('#extraRows tr:last-child ' + (chip.dataset.extra ? '.x-a' : '.x-d')).focus(); }
   if (e.target.closest('.rm')) { e.target.closest('tr').remove(); calc(); }
 });
+$('#addLeg').onclick = () => addLeg();
+$('#addReturn').onclick = addReturnLeg;
+$('#legs').addEventListener('click', (e) => { const r = e.target.closest('.rmleg'); if (r) { r.closest('.leg').remove(); renumberLegs(); calc(); } });
+['cpick', 'cdrop'].forEach((nme) => $('#billForm')[nme].addEventListener('input', renumberLegs));
 $('#fabBill').onclick = () => openBill(null);
 $('#billCancel').onclick = () => $('#billDlg').close();
 $('#billForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = e.target, items = readItems();
   const err = (m) => ($('#billMsg').innerHTML = `<div class="msg err">${ic('x')}<div>${esc(m)}</div></div>`);
-  if (!items.length) return err(billMode === 'fixed' ? 'Enter the fare amount.' : 'Enter distance and rate, a base fare, or at least one extra.');
+  if (!items.length) return err(billMode === 'fixed' ? 'Enter an amount for at least one leg.' : 'Enter the distance of at least one leg and the rate per km, a base fare, or an extra.');
   $('#billSave').disabled = true;
   try {
     const payload = { items, tax_percent: f.tax.value, whatsapp_to: f.wa.value };
