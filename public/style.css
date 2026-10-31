@@ -5,8 +5,8 @@
   --display:'Impact','Haettenschweiler','Arial Narrow Bold','Oswald',system-ui,sans-serif;
 }
 *{box-sizing:border-box}
-html{scroll-behavior:smooth;scroll-padding-top:70px}
-body{margin:0;font-family:Inter,system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.55;-webkit-font-smoothing:antialiased}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:70px}
+body{overflow-x:clip;margin:0;font-family:Inter,system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.55;-webkit-font-smoothing:antialiased}
 a{color:inherit}
 .wrap{max-width:1040px;margin:0 auto;padding:0 18px}
 .ic{width:1.15em;height:1.15em;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-.2em;flex:none}
@@ -92,7 +92,7 @@ form .row{display:grid;gap:12px;grid-template-columns:1fr 1fr}
 label{display:block;font-size:13.5px;font-weight:600;margin-bottom:14px;color:#334155}
 .field{display:block;position:relative;margin-top:5px}.field>.ic{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#94a3b8;pointer-events:none}
 .field.ta>.ic{top:20px}
-input,select,textarea{display:block;width:100%;padding:12px 12px;font:inherit;color:var(--ink);border:1px solid #cbd5e1;border-radius:11px;background:#fff;transition:border-color .15s,box-shadow .15s}
+input,select,textarea{font-size:16px!important;display:block;width:100%;padding:12px 12px;font:inherit;color:var(--ink);border:1px solid #cbd5e1;border-radius:11px;background:#fff;transition:border-color .15s,box-shadow .15s}
 .field input,.field textarea{padding-left:38px}
 label>input,label>select{margin-top:5px}
 input:focus,select:focus,textarea:focus{outline:0;border-color:var(--navy);box-shadow:0 0 0 3px rgba(18,48,107,.15)}
@@ -128,3 +128,6 @@ footer a{color:#fff;text-decoration:none}footer .links{display:flex;flex-wrap:wr
 .map-results li{display:block}.map-results .t{display:block;font-weight:600;color:var(--navy);font-size:14.5px}.map-results .s{display:block;color:var(--muted);font-size:12.5px}
 .map-results li.note{color:var(--muted);cursor:default;font-size:13.5px}.map-results li.note:hover{background:none}
 .map-results{max-height:210px}
+/* narrow phones: let form controls shrink instead of widening the page */
+.book-grid>*,form .row>*{min-width:0}
+input[type=date],input[type=datetime-local]{min-width:0;width:100%;max-width:100%;-webkit-appearance:none;appearance:none;min-height:46px}
