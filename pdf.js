@@ -23,106 +23,110 @@ const money = (n) => clean(`${config.currency}${Number(n).toLocaleString('en-IN'
 const when = (iso, opts) => new Date(iso).toLocaleString('en-GB', { timeZone: config.timezone, ...opts });
 
 export function buildBillPdf(bill, booking) {
-  const b = config.business, [first, ...rest] = b.name.trim().split(/\s+/);
-  const NAVY = '0.071 0.188 0.42', NAVY_D = '0.043 0.122 0.29', RED = '0.882 0.114 0.165', GREY = '0.4 0.45 0.52', INK = '0.06 0.09 0.16';
-  const SOFT = '0.965 0.973 0.988', LINE = '0.886 0.91 0.941', ZEBRA = '0.984 0.988 0.996', LIGHT = '0.78 0.83 0.93';
-  const paid = ['cash', 'card'].includes(String(bill.payment_method || '').toLowerCase());
+  const b = config.business;
+  const TINT = '1 0.902 0.6', GOLD = '0.498 0.376 0', RULE = '0.96 0.82 0.38', BORDER = '0.75 0.75 0.75', SEP = '0.89 0.89 0.89';
+  const INK = '0.07 0.07 0.07', GREY = '0.35 0.35 0.35', YEL = '1 0.902 0', BLACK = '0 0 0';
+  const paidBy = ['cash', 'card'].includes(String(bill.payment_method || '').toLowerCase()) ? bill.payment_method : '';
   const hasTrip = !(booking.pickup === '—' && booking.dropoff === '—');
-  const M = 40, R = W - M;
-  const pages = []; let ops;                       // all coordinates below are measured from the TOP of the page
+  const M = 44, R = W - M;
+  const pages = []; let ops;                       // coordinates are measured from the TOP of the page
   const addPage = () => { ops = []; pages.push(ops); };
+  const P = (x, top) => `${x.toFixed(2)} ${(H - top).toFixed(2)}`;
   const rect = (x, top, w, h, rgb) => ops.push(`${rgb} rg ${x.toFixed(2)} ${(H - top - h).toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} re f`);
-  const box = (x, top, w, h, fill, stroke) => ops.push(`${fill} rg ${stroke} RG 0.7 w ${x.toFixed(2)} ${(H - top - h).toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} re B`);
-  const line = (x1, top, x2, rgb = LINE, lw = 0.7) => ops.push(`${rgb} RG ${lw} w ${x1} ${(H - top).toFixed(2)} m ${x2} ${(H - top).toFixed(2)} l S`);
-  const text = (s, x, top, { size = 10, font = 'F1', rgb = INK, align = 'left', tc = 0 } = {}) => {
-    const w = textWidth(s, size, font !== 'F1') + tc * clean(s).length, px = align === 'right' ? x - w : align === 'center' ? x - w / 2 : x;
-    ops.push(`BT ${rgb} rg /${font} ${size} Tf ${tc} Tc ${px.toFixed(2)} ${(H - top).toFixed(2)} Td (${esc(s)}) Tj ET`);
+  const frame = (x, top, w, h, stroke = BORDER, lw = 0.8) => ops.push(`${stroke} RG ${lw} w ${x.toFixed(2)} ${(H - top - h).toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} re S`);
+  const line = (x1, t1, x2, t2, rgb = SEP, lw = 0.7) => ops.push(`${rgb} RG ${lw} w ${P(x1, t1)} m ${P(x2, t2)} l S`);
+  const poly = (pts, fill, stroke, lw = 1) => ops.push(`${fill} rg ${stroke} RG ${lw} w ${P(...pts[0])} m ${pts.slice(1).map((q) => P(...q) + ' l').join(' ')} h B`);
+  const circle = (cx, top, r, fill) => {
+    const k = 0.5523 * r, y = H - top, f = (n) => n.toFixed(2);
+    ops.push(`${fill} rg ${f(cx + r)} ${f(y)} m ${f(cx + r)} ${f(y + k)} ${f(cx + k)} ${f(y + r)} ${f(cx)} ${f(y + r)} c ${f(cx - k)} ${f(y + r)} ${f(cx - r)} ${f(y + k)} ${f(cx - r)} ${f(y)} c ${f(cx - r)} ${f(y - k)} ${f(cx - k)} ${f(y - r)} ${f(cx)} ${f(y - r)} c ${f(cx + k)} ${f(y - r)} ${f(cx + r)} ${f(y - k)} ${f(cx + r)} ${f(y)} c f`);
+  };
+  const text = (s, x, top, { size = 10, font = 'F1', rgb = INK, align = 'left' } = {}) => {
+    const w = textWidth(s, size, font !== 'F1'), px = align === 'right' ? x - w : align === 'center' ? x - w / 2 : x;
+    ops.push(`BT ${rgb} rg /${font} ${size} Tf ${px.toFixed(2)} ${(H - top).toFixed(2)} Td (${esc(s)}) Tj ET`);
+  };
+  const taxiIcon = (x0, t0, s) => {                 // little taxi, drawn from simple shapes
+    const X = (x) => x0 + x * s, T = (y) => t0 + y * s;
+    poly([[23, 2], [41, 2], [41, 11], [23, 11]].map(([x, y]) => [X(x), T(y)]), YEL, BLACK, 1.2);
+    text('TAXI', X(32), T(8.6), { size: 5.2 * s, font: 'F2', align: 'center' });
+    poly([[8, 24], [12, 15], [14, 12], [50, 12], [52, 15], [56, 24], [56, 45], [8, 45]].map(([x, y]) => [X(x), T(y)]), YEL, BLACK, 1.8);
+    poly([[15, 24], [18, 17], [46, 17], [49, 24]].map(([x, y]) => [X(x), T(y)]), BLACK, BLACK, 0.5);
+    circle(X(17), T(35), 3.2 * s, BLACK); circle(X(47), T(35), 3.2 * s, BLACK);
+    circle(X(18), T(50), 6 * s, BLACK); circle(X(46), T(50), 6 * s, BLACK);
   };
 
-  // ---- header band ----
-  const header = (compact) => {
-    const bh = compact ? 56 : 112;
-    rect(0, 0, W, bh, NAVY); rect(0, bh, W, 4, RED);
-    if (compact) {
-      text(`${first} ${rest.join(' ')}`.toUpperCase(), M, 34, { size: 14, font: 'F2', rgb: '1 1 1' });
-      text(`INVOICE ${bill.number}  (continued)`, R, 34, { size: 10, rgb: LIGHT, align: 'right' });
-      return bh + 30;
-    }
-    text(first, M, 44, { size: 22, font: 'F3', rgb: '1 0.42 0.45' });
-    text((rest.join(' ') || first).toUpperCase(), M, 76, { size: 30, font: 'F2', rgb: '1 1 1' });
-    text(String(b.tagline || '').replace(/\s*•.*$/, ''), M, 96, { size: 9.5, rgb: LIGHT });
-    text('INVOICE', R + 3, 52, { size: 9, rgb: LIGHT, align: 'right', tc: 3 });
-    text(bill.number, R, 76, { size: 19, font: 'F2', rgb: '1 1 1', align: 'right' });
-    return bh + 30;
-  };
-  addPage(); let y = header(false);
+  // ---- first page header: icon + company on the left, BILL + invoice table on the right ----
+  addPage();
+  taxiIcon(M, 34, 0.95);
+  text(b.name, M, 122, { size: 20 });
+  const contact = [b.driverName, b.address, b.email, b.phone, b.licence ? `Vehicle: ${b.licence}` : ''].filter(Boolean);
+  contact.forEach((l, i) => text(l, M, 146 + i * 15, { size: 10, rgb: '0.15 0.15 0.15' }));
+  text('BILL', R, 80, { size: 38, font: 'F2', rgb: GOLD, align: 'right' });
+  const mx = 330, c1 = 135, c2 = R - mx - c1;
+  rect(mx, 112, R - mx, 24, TINT);
+  text('Invoice #', mx + c1 / 2, 128, { size: 10.5, font: 'F2', align: 'center' }); text('Date', mx + c1 + c2 / 2, 128, { size: 10.5, font: 'F2', align: 'center' });
+  text(bill.number, mx + c1 / 2, 154, { size: 10.5, font: 'F2', align: 'center' });
+  text(when(bill.created_at, { day: '2-digit', month: '2-digit', year: 'numeric' }), mx + c1 + c2 / 2, 154, { size: 10.5, font: 'F2', align: 'center' });
+  text(`Booking ref: ${booking.ref}`, R, 176, { size: 9, rgb: GREY, align: 'right' });
+  let y = Math.max(146 + (contact.length - 1) * 15, 180) + 40;
 
-  // ---- meta row ----
-  const meta = [['DATE', when(bill.created_at, { dateStyle: 'medium' })], ['BOOKING REF', booking.ref]];
-  meta.forEach(([k, v], i) => { text(k, M + i * 180, y, { size: 7.5, font: 'F2', rgb: GREY, tc: 1 }); text(v, M + i * 180, y + 15, { size: 12, font: 'F2' }); });
-  if (paid) { text('PAYMENT', M + 360, y, { size: 7.5, font: 'F2', rgb: GREY, tc: 1 }); rect(M + 360, y + 5, 96, 18, '0.863 0.988 0.906'); text(`PAID - ${bill.payment_method}`.toUpperCase(), M + 408, y + 17.5, { size: 8.5, font: 'F2', rgb: '0.086 0.396 0.204', align: 'center' }); }
-  y += 38; line(M, y, R); y += 18;
-
-  // ---- billed to / trip cards ----
-  const cw = (R - M - 14) / 2, lx = M + 12;
-  const fromL = wrap(booking.pickup, 10.5, cw - 64, 2), toL = wrap(booking.dropoff, 10.5, cw - 64, 2);
-  const tripH = hasTrip ? 40 + (fromL.length + toL.length) * 13 + 16 : 52, cardH = Math.max(72, tripH);
-  box(M, y, cw, cardH, SOFT, LINE); box(M + cw + 14, y, cw, cardH, SOFT, LINE);
-  text('BILLED TO', lx, y + 18, { size: 7.5, font: 'F2', rgb: GREY, tc: 1 });
-  text(fit(booking.name, 13, cw - 24, true), lx, y + 36, { size: 13, font: 'F2' }); text(booking.phone, lx, y + 52, { size: 10, rgb: GREY });
-  const rx = M + cw + 14 + 12;
+  // ---- Bill to / Trip ----
+  const gap = 28, cw = (R - M - gap) / 2, rx = M + cw + gap;
+  text('Bill to', M + 4, y, { size: 13, font: 'F2' }); line(M, y + 8, M + cw, y + 8, RULE, 2);
+  text(fit(booking.name, 11, cw - 8, true), M + 4, y + 28, { size: 11, font: 'F2' }); text(booking.phone, M + 4, y + 44, { size: 10.5 });
+  text(hasTrip ? 'Trip' : 'Date', rx + 4, y, { size: 13, font: 'F2' }); line(rx, y + 8, rx + cw, y + 8, RULE, 2);
+  let ty = y + 28;
   if (hasTrip) {
-    text('TRIP', rx, y + 18, { size: 7.5, font: 'F2', rgb: GREY, tc: 1 });
-    let ty = y + 36;
-    text('FROM', rx, ty, { size: 7.5, font: 'F2', rgb: GREY }); fromL.forEach((l) => { text(l, rx + 40, ty, { size: 10.5, font: 'F2' }); ty += 13; });
-    text('TO', rx, ty, { size: 7.5, font: 'F2', rgb: GREY }); toL.forEach((l) => { text(l, rx + 40, ty, { size: 10.5, font: 'F2' }); ty += 13; });
-    text(`${when(booking.pickup_at, { dateStyle: 'medium', timeStyle: 'short' })}  |  ${booking.passengers} passenger${booking.passengers > 1 ? 's' : ''}`, rx, ty + 6, { size: 9, rgb: GREY });
-  } else { text('DATE', rx, y + 18, { size: 7.5, font: 'F2', rgb: GREY, tc: 1 }); text(when(booking.pickup_at, { dateStyle: 'medium' }), rx, y + 36, { size: 13, font: 'F2' }); }
-  y += cardH + 20;
+    const fromL = wrap(booking.pickup, 10.5, cw - 52, 2), toL = wrap(booking.dropoff, 10.5, cw - 52, 2);
+    text('From', rx + 4, ty, { size: 9, rgb: GREY }); fromL.forEach((l) => { text(l, rx + 44, ty, { size: 10.5 }); ty += 14; });
+    text('To', rx + 4, ty, { size: 9, rgb: GREY }); toL.forEach((l) => { text(l, rx + 44, ty, { size: 10.5 }); ty += 14; });
+    text(`${when(booking.pickup_at, { dateStyle: 'medium', timeStyle: 'short' })}  |  ${booking.passengers} passenger${booking.passengers > 1 ? 's' : ''}`, rx + 4, ty + 2, { size: 9.5, rgb: GREY }); ty += 16;
+  } else { text(when(booking.pickup_at, { dateStyle: 'medium' }), rx + 4, ty, { size: 10.5 }); ty += 16; }
+  y = Math.max(y + 56, ty) + 26;
 
-  // ---- items table (flows onto further pages if needed) ----
-  const cQty = 372, cRate = 460, cAmt = R - 10, FOOT = 72, RESERVE = 190;
-  const tableHead = () => { rect(M, y, R - M, 24, NAVY); text('DESCRIPTION', M + 10, y + 15.5, { size: 7.5, font: 'F2', rgb: '1 1 1', tc: 1 }); text('QTY', cQty, y + 15.5, { size: 7.5, font: 'F2', rgb: '1 1 1', align: 'right', tc: 1 }); text('RATE', cRate, y + 15.5, { size: 7.5, font: 'F2', rgb: '1 1 1', align: 'right', tc: 1 }); text('AMOUNT', cAmt, y + 15.5, { size: 7.5, font: 'F2', rgb: '1 1 1', align: 'right', tc: 1 }); y += 24; };
-  tableHead();
-  bill.items.forEach((it, idx) => {
-    const dl = wrap(it.description, 10, 292, 3), rh = dl.length * 12 + 14;
-    if (y + rh > H - FOOT - 20) { addPage(); y = header(true); tableHead(); }
-    if (idx % 2 === 0) rect(M, y, R - M, rh, ZEBRA);
-    dl.forEach((ln, i) => text(ln, M + 10, y + 17 + i * 12, { size: 10 }));
-    text(String(+it.qty), cQty, y + 17, { size: 10, align: 'right' }); text(money(it.rate), cRate, y + 17, { size: 10, align: 'right' }); text(money(it.amount), cAmt, y + 17, { size: 10, font: 'F2', align: 'right' });
-    y += rh; line(M, y, R);
+  // ---- items table (bordered, flows onto more pages) ----
+  const amtX = R - 118, BOTTOM = H - 58;
+  let segTop = 0;
+  const openTable = () => { segTop = y; rect(M, y, R - M, 26, TINT); text('Description', M + 10, y + 17, { size: 11.5 }); text('Amount', R - 10, y + 17, { size: 11.5, align: 'right' }); line(M, y + 26, R, y + 26, BORDER, 0.8); y += 26; };
+  const closeTable = () => { frame(M, segTop, R - M, y - segTop); line(amtX, segTop, amtX, y, BORDER, 0.8); };
+  const compactHeader = () => {
+    text(b.name, M, 44, { size: 15 }); text(`BILL ${bill.number}  (continued)`, R, 44, { size: 10, font: 'F2', rgb: GOLD, align: 'right' });
+    line(M, 54, R, 54, RULE, 1.6); return 84;
+  };
+  openTable();
+  bill.items.forEach((it) => {
+    const dl = wrap(it.description, 10.5, amtX - M - 22, 3), rh = dl.length * 13.5 + 9 + 14;
+    if (y + rh > BOTTOM) { closeTable(); addPage(); y = compactHeader(); openTable(); }
+    dl.forEach((ln, i) => text(ln, M + 10, y + 17 + i * 13.5, { size: 10.5 }));
+    text(`${+it.qty} x ${money(it.rate)}`, M + 10, y + 17 + dl.length * 13.5 - 2, { size: 8.5, rgb: GREY });
+    text(money(it.amount), R - 10, y + 17, { size: 10.5, align: 'right' });
+    y += rh; line(M + 0.4, y, R - 0.4, y, SEP);
   });
+  closeTable();
 
   // ---- totals ----
-  if (y + RESERVE - FOOT > H - FOOT - 20) { addPage(); y = header(true); }
-  y += 14; const tx = 330;
-  text('Subtotal', tx, y + 4, { size: 10.5, rgb: GREY }); text(money(bill.subtotal), R - 4, y + 4, { size: 10.5, align: 'right' }); y += 20;
-  if (bill.tax_percent) { text(`Tax (${+bill.tax_percent}%)`, tx, y + 4, { size: 10.5, rgb: GREY }); text(money(bill.tax), R - 4, y + 4, { size: 10.5, align: 'right' }); y += 20; }
-  rect(tx - 8, y, R - tx + 8, 40, NAVY_D);
-  text('TOTAL', tx + 6, y + 24.5, { size: 8.5, font: 'F2', rgb: '1 1 1', tc: 2 }); text(money(bill.total), R - 12, y + 26, { size: 17, font: 'F2', rgb: '1 1 1', align: 'right' });
-  y += 66;
-  text('Thank you for riding with us!', W / 2, y, { size: 12, font: 'F2', rgb: NAVY, align: 'center' });
+  if (y + 150 > BOTTOM) { addPage(); y = compactHeader() - 20; }
+  y += 18; const tx = 330;
+  text('Subtotal', tx + 10, y, { size: 10.5 }); text(money(bill.subtotal), R - 10, y, { size: 10.5, align: 'right' }); y += 19;
+  if (bill.tax_percent) { text(`Tax (${+bill.tax_percent}%)`, tx + 10, y, { size: 10.5 }); text(money(bill.tax), R - 10, y, { size: 10.5, align: 'right' }); y += 19; }
+  rect(tx, y - 8, R - tx, 32, TINT); frame(tx, y - 8, R - tx, 32);
+  text('Total', tx + 10, y + 13, { size: 12.5, font: 'F2' }); text(money(bill.total), R - 10, y + 13, { size: 14, font: 'F2', align: 'right' });
+  if (paidBy) text(`Paid by ${paidBy}. Thank you!`, M + 4, y + 13, { size: 10.5 });
+  y += 70;
+  text('Thank you for your business!', W / 2, y, { size: 12, align: 'center' });
 
-  // ---- footer on every page ----
-  pages.forEach((pg, i) => {
-    ops = pg;
-    rect(0, H - FOOT, W, FOOT, SOFT); line(0, H - FOOT, W, LINE, 0.7);
-    text(`${b.name}  |  ${b.driverName}`, W / 2, H - 44, { size: 9.5, font: 'F2', align: 'center' });
-    text(`${b.phone}${b.email ? '  |  ' + b.email : ''}`, W / 2, H - 31, { size: 8.5, rgb: GREY, align: 'center' });
-    text(`${b.address}${b.licence ? '  |  Vehicle ' + b.licence : ''}  |  Computer-generated bill${pages.length > 1 ? `  |  Page ${i + 1} of ${pages.length}` : ''}`, W / 2, H - 18, { size: 7.5, rgb: GREY, align: 'center' });
-  });
+  // ---- tiny footer on every page ----
+  pages.forEach((pg, i) => { ops = pg; text(`Computer-generated bill${pages.length > 1 ? `  |  Page ${i + 1} of ${pages.length}` : ''}`, W / 2, H - 26, { size: 8, rgb: '0.55 0.55 0.55', align: 'center' }); });
 
   // ---- assemble PDF ----
   const N = pages.length, objs = [
     '<< /Type /Catalog /Pages 2 0 R >>',
-    `<< /Type /Pages /Kids [${pages.map((_, i) => `${6 + i * 2} 0 R`).join(' ')}] /Count ${N} >>`,
+    `<< /Type /Pages /Kids [${pages.map((_, i) => `${5 + i * 2} 0 R`).join(' ')}] /Count ${N} >>`,
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>',
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-BoldOblique /Encoding /WinAnsiEncoding >>',
   ];
   const streams = [];
   pages.forEach((pg, i) => {
-    objs.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents ${7 + i * 2} 0 R >>`);
+    objs.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${6 + i * 2} 0 R >>`);
     objs.push(null); streams.push(Buffer.from(pg.join('\n'), 'latin1'));
   });
   const parts = [Buffer.from('%PDF-1.4\n%\xe2\xe3\xcf\xd3\n', 'latin1')], offsets = [];

@@ -39,67 +39,64 @@ export function billMessage(bill, booking, link) {
   return lines.join('\n');
 }
 
+// Simple taxi icon (inline SVG), in the spirit of a classic receipt template
+const TAXI_SVG = `<svg viewBox="0 0 64 60" width="60" height="56" aria-hidden="true"><rect x="23" y="2" width="18" height="9" rx="2" fill="#ffe600" stroke="#111" stroke-width="2"/><text x="32" y="9.2" font-size="5.6" font-weight="700" text-anchor="middle" font-family="Arial,sans-serif">TAXI</text><path d="M8 24 L12 15 Q13 12 17 12 H47 Q51 12 52 15 L56 24 V45 H8 Z" fill="#ffe600" stroke="#111" stroke-width="2.6" stroke-linejoin="round"/><path d="M15 24 L18 17 H46 L49 24 Z" fill="#111"/><circle cx="17" cy="35" r="3.2" fill="#111"/><circle cx="47" cy="35" r="3.2" fill="#111"/><circle cx="18" cy="50" r="6" fill="#111"/><circle cx="46" cy="50" r="6" fill="#111"/></svg>`;
+
 export function renderBill(bill, booking) {
-  const b = config.business, [first, ...rest] = b.name.trim().split(/\s+/);
+  const b = config.business;
   const hasTrip = !(booking.pickup === '—' && booking.dropoff === '—');
-  const paid = ['cash', 'card'].includes(String(bill.payment_method || '').toLowerCase());
-  const tagline = String(b.tagline || '').replace(/\s*•.*$/, '');
-  const items = bill.items.map((i) => `<div class="it"><div class="d"><b>${esc(i.description)}</b><span>${+i.qty} &times; ${money(i.rate)}</span></div><div class="a">${money(i.amount)}</div></div>`).join('');
+  const paidBy = ['cash', 'card'].includes(String(bill.payment_method || '').toLowerCase()) ? bill.payment_method : '';
+  const items = bill.items.map((i) => `<tr><td><div class="dsc">${esc(i.description)}</div><div class="sub">${+i.qty} &times; ${money(i.rate)}</div></td><td class="amt">${money(i.amount)}</td></tr>`).join('');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Bill ${esc(bill.number)} – ${esc(b.name)}</title>
 <style>
-:root{--navy:#12306b;--navy-d:#0b1f4a;--red:#e11d2a;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--soft:#f6f8fc}
+:root{--tint:#ffe699;--tint2:#fff5d1;--gold:#7f6000;--rule:#f3d98b;--border:#bfbfbf;--ink:#111;--muted:#595959}
 *{box-sizing:border-box}
-body{margin:0;background:#e9edf5;font-family:Inter,system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;color:var(--ink);line-height:1.5;-webkit-font-smoothing:antialiased;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.page{padding:18px 12px 32px}
-.sheet{max-width:780px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 10px 40px rgba(15,23,42,.14)}
-.band{background:linear-gradient(120deg,var(--navy-d),var(--navy));color:#fff;padding:26px 28px;display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
-.brand{line-height:1}.jo{display:block;font-family:'Brush Script MT','Lucida Handwriting','Segoe Script',cursive;font-style:italic;font-weight:700;color:#ff6b73;font-size:26px;margin-left:2px}
-.tc{display:block;font-family:Impact,'Haettenschweiler','Arial Narrow Bold',Inter,sans-serif;font-weight:900;font-size:36px;letter-spacing:.02em;text-transform:uppercase}
-.tag{margin-top:8px;font-size:12.5px;color:#c7d3ee;letter-spacing:.02em}
-.inv{text-align:right}.inv .lbl{font-size:12px;letter-spacing:.28em;color:#c7d3ee}.inv .no{font-size:22px;font-weight:700;margin-top:2px}
-.accent{height:4px;background:linear-gradient(90deg,var(--red),#ff6b73)}
-.body{padding:26px 28px 8px}
-.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:14px;padding-bottom:20px;border-bottom:1px solid var(--line)}
-.meta div span{display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600}.meta div b{font-size:15px}
-.chip{display:inline-block;margin-top:2px;padding:3px 12px;border-radius:99px;background:#dcfce7;color:#166534;font-weight:700;font-size:13px}
-.cards{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:20px 0}
-@media(max-width:560px){.cards{grid-template-columns:1fr}.band{padding:22px 20px}.body{padding:22px 18px 6px}.tc{font-size:30px}.inv{text-align:left}}
-.route>div{display:flex;gap:10px;align-items:baseline;margin-bottom:4px}.route i{font-style:normal;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);min-width:34px}.route b{font-size:15px;overflow-wrap:anywhere}
-.card{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
-.card h4{margin:0 0 6px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
-.card b{display:block;font-size:16px}.card span{display:block;color:var(--muted);font-size:13.5px;overflow-wrap:anywhere}
-.arrow{color:var(--red);font-weight:700;padding:0 4px}
-.items{margin-top:6px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
-.items .hd{display:flex;justify-content:space-between;background:var(--navy);color:#fff;padding:10px 16px;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:600}
-.it{display:flex;justify-content:space-between;gap:16px;padding:12px 16px;border-top:1px solid var(--line)}.it:nth-child(odd){background:#fbfcfe}
-.it .d b{display:block;font-weight:600;font-size:14.5px;overflow-wrap:anywhere}.it .d span{display:block;color:var(--muted);font-size:12.5px}.it .a{font-weight:600;white-space:nowrap}
-.totals{margin:16px 0 0 auto;max-width:340px}
-.totals .row{display:flex;justify-content:space-between;padding:6px 4px;color:var(--muted);font-size:14.5px}
-.totals .grand{display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding:14px 16px;border-radius:12px;background:linear-gradient(120deg,var(--navy-d),var(--navy));color:#fff}
-.grand span{font-size:12px;letter-spacing:.16em;font-weight:600}.grand b{font-size:24px}
-.thanks{margin:24px 0 20px;text-align:center;color:var(--navy);font-weight:600}
-.foot{background:var(--soft);border-top:1px solid var(--line);padding:16px 28px;text-align:center;color:var(--muted);font-size:12.5px}
-.foot b{color:var(--ink)}
-.btn{display:block;margin:18px auto 0;max-width:780px;padding:13px;background:var(--red);color:#fff;border:0;border-radius:12px;font:inherit;font-weight:600;cursor:pointer;width:100%}
-@page{size:A4;margin:10mm}
-@media print{body{background:#fff}.page{padding:0}.sheet{box-shadow:none;border-radius:0}.btn{display:none}}
+body{margin:0;background:#f1f1f1;font-family:Arial,Helvetica,'Segoe UI',sans-serif;color:var(--ink);line-height:1.45;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.page{padding:16px 10px 30px}
+.sheet{max-width:800px;margin:0 auto;background:#fff;padding:36px 40px 30px;box-shadow:0 1px 8px rgba(0,0,0,.12)}
+.top{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
+.coname{font-size:24px;margin:8px 0 10px}
+.cl{font-size:14px;line-height:1.75;color:#222}
+.ttl{text-align:right;min-width:250px}
+.ttl h1{margin:6px 0 22px;font-size:46px;letter-spacing:.01em;color:var(--gold);line-height:1}
+table{border-collapse:collapse;width:100%}
+.meta th{background:var(--tint);padding:7px 10px;font-size:14px;text-align:center}
+.meta td{padding:8px 10px;text-align:center;font-weight:700;font-size:14px}
+.ref{margin-top:6px;font-size:12.5px;color:var(--muted)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin:34px 0 30px}
+.two h3{margin:0;padding:0 0 6px 4px;font-size:17px;border-bottom:2px solid var(--rule)}
+.two .ln{padding:6px 4px 0;font-size:14px;overflow-wrap:anywhere}.two .ln:first-of-type{padding-top:10px}
+.two .k{color:var(--muted);display:inline-block;min-width:44px}
+.items{border:1px solid var(--border)}
+.items th{background:var(--tint);padding:9px 12px;font-size:15px;font-weight:400;text-align:left;border-bottom:1px solid var(--border)}
+.items th:last-child,.items td.amt{text-align:right;width:150px;border-left:1px solid var(--border)}
+.items td{padding:10px 12px;vertical-align:top;border-top:1px solid #e3e3e3}
+.items tr:first-child td{border-top:0}
+.dsc{font-size:14.5px;overflow-wrap:anywhere}.sub{font-size:12px;color:var(--muted);margin-top:2px}
+.items td.amt{font-size:14.5px;white-space:nowrap}
+.totals{margin:14px 0 0 auto;max-width:320px;font-size:14.5px}
+.totals .row{display:flex;justify-content:space-between;padding:5px 12px}
+.totals .grand{display:flex;justify-content:space-between;margin-top:6px;padding:11px 12px;background:var(--tint);font-weight:700;font-size:17px;border:1px solid var(--border)}
+.note{margin:26px 4px 0;font-size:14px}
+.thanks{margin:56px 0 4px;text-align:center;font-size:15px}
+.fine{text-align:center;font-size:11px;color:#8a8a8a;margin-top:8px}
+.btn{display:block;margin:16px auto 0;max-width:800px;width:100%;padding:12px;background:#222;color:#fff;border:0;border-radius:6px;font:inherit;font-weight:600;cursor:pointer}
+@media(max-width:600px){.sheet{padding:24px 18px}.top{flex-direction:column}.ttl{text-align:left}.ttl h1{font-size:38px;margin:0 0 14px}.two{grid-template-columns:1fr;gap:22px;margin:26px 0 22px}.items th:last-child,.items td.amt{width:112px}.thanks{margin-top:36px}}
+@page{size:A4;margin:12mm}
+@media print{body{background:#fff}.page{padding:0}.sheet{box-shadow:none;padding:0}.btn{display:none}}
 </style></head><body><div class="page"><div class="sheet">
-<div class="band"><div class="brand"><span class="jo">${esc(first)}</span><span class="tc">${esc(rest.join(' ') || first)}</span><div class="tag">${esc(tagline)}</div></div>
-<div class="inv"><div class="lbl">INVOICE</div><div class="no">${esc(bill.number)}</div></div></div>
-<div class="accent"></div>
-<div class="body">
-<div class="meta"><div><span>Date</span><b>${esc(when(bill.created_at, { dateStyle: 'medium' }))}</b></div><div><span>Booking ref</span><b>${esc(booking.ref)}</b></div>
-${paid ? `<div><span>Payment</span><b class="chip">PAID &middot; ${esc(bill.payment_method)}</b></div>` : ''}</div>
-<div class="cards"><div class="card"><h4>Billed to</h4><b>${esc(booking.name)}</b><span>${esc(booking.phone)}</span></div>
-<div class="card"><h4>${hasTrip ? 'Trip' : 'Date'}</h4>${hasTrip ? `<div class="route"><div><i>From</i><b>${esc(booking.pickup)}</b></div><div><i>To</i><b>${esc(booking.dropoff)}</b></div></div><span style="margin-top:6px">${esc(when(booking.pickup_at))} &middot; ${booking.passengers} passenger${booking.passengers > 1 ? 's' : ''}</span>` : `<b>${esc(when(booking.pickup_at, { dateStyle: 'medium' }))}</b>`}</div></div>
-<div class="items"><div class="hd"><span>Description</span><span>Amount</span></div>${items}</div>
+<div class="top"><div class="co">${TAXI_SVG}<div class="coname">${esc(b.name)}</div>
+<div class="cl">${esc(b.driverName)}<br>${esc(b.address)}<br>${b.email ? esc(b.email) + '<br>' : ''}${esc(b.phone)}${b.licence ? '<br>Vehicle: ' + esc(b.licence) : ''}</div></div>
+<div class="ttl"><h1>BILL</h1><table class="meta"><thead><tr><th>Invoice #</th><th>Date</th></tr></thead><tbody><tr><td>${esc(bill.number)}</td><td>${esc(when(bill.created_at, { day: '2-digit', month: '2-digit', year: 'numeric' }))}</td></tr></tbody></table><div class="ref">Booking ref: ${esc(booking.ref)}</div></div></div>
+<div class="two"><section><h3>Bill to</h3><div class="ln"><b>${esc(booking.name)}</b></div><div class="ln">${esc(booking.phone)}</div></section>
+<section><h3>${hasTrip ? 'Trip' : 'Date'}</h3>${hasTrip ? `<div class="ln"><span class="k">From</span> ${esc(booking.pickup)}</div><div class="ln"><span class="k">To</span> ${esc(booking.dropoff)}</div><div class="ln">${esc(when(booking.pickup_at))} &middot; ${booking.passengers} passenger${booking.passengers > 1 ? 's' : ''}</div>` : `<div class="ln">${esc(when(booking.pickup_at, { dateStyle: 'medium' }))}</div>`}</section></div>
+<table class="items"><thead><tr><th>Description</th><th>Amount</th></tr></thead><tbody>${items}</tbody></table>
 <div class="totals"><div class="row"><span>Subtotal</span><span>${money(bill.subtotal)}</span></div>
 ${bill.tax_percent ? `<div class="row"><span>Tax (${+bill.tax_percent}%)</span><span>${money(bill.tax)}</span></div>` : ''}
-<div class="grand"><span>TOTAL</span><b>${money(bill.total)}</b></div></div>
-<div class="thanks">Thank you for riding with us! 🙏</div>
-</div>
-<div class="foot"><b>${esc(b.name)}</b> &middot; ${esc(b.driverName)}<br>${esc(b.phone)}${b.email ? ' &middot; ' + esc(b.email) : ''}<br>${esc(b.address)}${b.licence ? ' &middot; Vehicle ' + esc(b.licence) : ''}<br><span style="opacity:.8">This is a computer-generated bill.</span></div>
+<div class="grand"><span>Total</span><span>${money(bill.total)}</span></div></div>
+${paidBy ? `<div class="note">Paid by ${esc(paidBy)}. Thank you!</div>` : ''}
+<div class="thanks">Thank you for your business!</div><div class="fine">This is a computer-generated bill.</div>
 </div><button class="btn" onclick="window.print()">Print / Save as PDF</button></div></body></html>`;
 }
 

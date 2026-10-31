@@ -189,8 +189,8 @@ const many = Array.from({ length: 20 }, (_, i) => ({ description: `Leg ${i + 1} 
 const big = await j('/api/driver/bills', 'POST', { customer: { name: 'Many Legs', pickup: 'Edappally', dropoff: 'Airport', phone: '9847011188' }, items: many }, ck2);
 assert.equal(big.status, 201);
 const bigPdf = await (async () => Buffer.from(await (await fetch(big.data.link.replace(/^https?:\/\/[^/]+/, base) + '.pdf')).arrayBuffer()).toString('latin1'))();
-assert.ok(bigPdf.includes('/Count 2'), 'a 20-line bill continues on a second PDF page');
+assert.ok(/\/Count [2-9]/.test(bigPdf), 'a 20-line bill continues on further PDF pages');
 assert.ok(bigPdf.includes('continued'), 'continuation pages carry a compact header');
 const bigHtml = await (await fetch(big.data.link.replace(/^https?:\/\/[^/]+/, base))).text();
-assert.ok(bigHtml.includes('INVOICE') && bigHtml.includes('<i>From</i>') && bigHtml.includes('<i>To</i>') && bigHtml.includes('TOTAL'), 'invoice layout');
+assert.ok(['<h1>BILL</h1>', 'Invoice #', 'Bill to', '>Description<', '>Amount<', 'Thank you for your business!', 'Booking ref'].every((s) => bigHtml.includes(s)), 'receipt-style layout');
 console.log('All tests passed'); process.exit(0);
