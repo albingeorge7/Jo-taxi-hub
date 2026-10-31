@@ -170,4 +170,8 @@ assert.ok((await hb('q=Old%20Trip')).length === 1 && (await hb('q=9847011155')).
 assert.equal((await hb('q=%25')).length, 0, 'wildcards in search are escaped');
 assert.ok((await hb('preset=today')).length >= 3 && (await hb('preset=today')).every((x) => x.bill_number !== undefined), 'today preset; bill number included');
 assert.equal((await j('/api/driver/bookings?preset=custom&from=bad&to=2026-01-01', 'GET', null, ck2)).status, 400);
+// the customer page must actually send the visit beacon (a past edit silently dropped it)
+const appJs = await (await fetch(base + '/app.js')).text();
+assert.ok(appJs.includes("fetch('/api/visit'") && appJs.includes("sessionStorage.getItem('visited')"), 'app.js sends the visit counter request');
+assert.ok((await (await fetch(base + '/')).text()).includes('/app.js'), 'home page loads app.js');
 console.log('All tests passed'); process.exit(0);

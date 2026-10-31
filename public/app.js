@@ -224,3 +224,12 @@ async function locate() {
 $('#mapLocate').onclick = locate;
 $('#locClose').onclick = () => $('#locDlg').close();
 $('#locRetry').onclick = () => { $('#locDlg').close(); locate(); };
+
+// anonymous visit counter: once per browser session (no cookies, no personal data)
+try {
+  if (!sessionStorage.getItem('visited')) {
+    sessionStorage.setItem('visited', '1');
+    fetch('/api/visit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
+      body: JSON.stringify({ ref: document.referrer, src: new URLSearchParams(location.search).get('src') || '' }) }).catch(() => {});
+  }
+} catch { /* storage blocked: skip counting */ }
