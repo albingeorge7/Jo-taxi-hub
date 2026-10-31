@@ -121,4 +121,13 @@ assert.equal((await j('/api/driver/bills', 'POST', { booking_id: id + 999, items
 assert.equal((await j('/api/driver/bills', 'POST', { customer: { name: 'x', pickup: 'A', dropoff: 'B', phone: '9847011122' }, items: [{ description: 'x', qty: 1, rate: 1e12 }] }, cookie)).status, 400, 'absurd amounts rejected');
 assert.equal((await j(`/api/driver/bookings/${id}`, 'PATCH', { status: 'bogus' }, cookie)).status, 400);
 assert.equal((await j(`/api/driver/bookings/${id}`, 'PATCH', { fare: -5 }, cookie)).status, 400);
+// the WhatsApp number typed while billing must be used everywhere, including later re-sends
+const bk2 = await j('/api/bookings', 'POST', { name: 'Ravi', phone: '9847011144', pickup: 'A', dropoff: 'B', pickup_at: when }, undefined, { 'CF-Connecting-IP': '5.5.5.5' });
+const id2 = (await j('/api/driver/bookings', 'GET', null, cookie)).data.find((x) => x.ref === bk2.data.ref).id;
+assert.equal((await j('/api/driver/bills', 'POST', { booking_id: id2, whatsapp_to: 'abc', items: [{ description: 'f', qty: 1, rate: 5 }] }, cookie)).status, 400, 'invalid WhatsApp number rejected');
+const nb = await j('/api/driver/bills', 'POST', { booking_id: id2, whatsapp_to: '98470 99999', items: [{ description: 'Fare', qty: 1, rate: 300 }] }, cookie);
+assert.ok(nb.data.whatsapp.startsWith('https://wa.me/919847099999?text='), 'new bill uses the edited number');
+const rs = await j(`/api/driver/bills/${id2}/send`, 'POST', {}, cookie);
+assert.ok(rs.data.whatsapp.startsWith('https://wa.me/919847099999?text='), 're-send uses the edited number, not the booking number');
+assert.ok(!nb.data.whatsapp.includes('919847011144'));
 console.log('All tests passed'); process.exit(0);

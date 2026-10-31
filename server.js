@@ -64,6 +64,8 @@ for (const col of ['pickup_lat', 'pickup_lng', 'drop_lat', 'drop_lng']) {
 }
 try { db.exec("ALTER TABLE bookings ADD COLUMN source TEXT NOT NULL DEFAULT 'web'"); } catch { /* column exists */ }
 
+try { db.exec('ALTER TABLE bills ADD COLUMN wa_to TEXT'); } catch { /* column exists */ }
+
 const STATUSES = ['pending', 'confirmed', 'completed', 'cancelled', 'rejected'];
 const round2 = (n) => Math.round(n * 100) / 100;
 const clean = (v, max) => String(v ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max);
@@ -329,6 +331,8 @@ async function api(req, res, url) {
     if (subtotal <= 0) throw new HttpError(400, 'Bill total must be more than zero');
     const tax = round2(subtotal * taxPercent / 100), total = round2(subtotal + tax);
 
+    const waTo = clean(b.whatsapp_to, 20);
+    if (waTo && !/^\+?[0-9 ()-]{7,20}$/.test(waTo)) throw new HttpError(400, "Enter a valid WhatsApp number");
     let booking;
     if (b.booking_id) {
       booking = db.prepare('SELECT * FROM bookings WHERE id=?').get(Number(b.booking_id));
@@ -348,12 +352,12 @@ async function api(req, res, url) {
     const ym = new Date().toISOString().slice(0, 7).replace('-', '');
     const seq = db.prepare('SELECT COUNT(*) c FROM bills').get().c + 1;
     const number = `INV-${ym}-${String(seq).padStart(4, '0')}`;
-    const info = db.prepare(`INSERT INTO bills (booking_id,token,number,items,subtotal,tax_percent,tax,total,payment_method) VALUES (?,?,?,?,?,?,?,?,?)`)
-      .run(booking.id, token, number, JSON.stringify(items), subtotal, taxPercent, tax, total, clean(b.payment_method, 30) || null);
+    const info = db.prepare(`INSERT INTO bills (booking_id,token,number,items,subtotal,tax_percent,tax,total,payment_method,wa_to) VALUES (?,?,?,?,?,?,?,?,?,?)`)
+      .run(booking.id, token, number, JSON.stringify(items), subtotal, taxPercent, tax, total, clean(b.payment_method, 30) || null, waTo || null);
     db.prepare(`UPDATE bookings SET status='completed', fare=? WHERE id=?`).run(total, booking.id);
     const bill = loadBill(db.prepare('SELECT * FROM bills WHERE id=?').get(info.lastInsertRowid));
     const link = `${baseUrl(req)}/bill/${token}`;
-    return send(res, 201, { bill, link, whatsapp: waLink(clean(b.whatsapp_to, 20) || booking.phone, bill, booking, link) });
+    return send(res, 201, { bill, link, whatsapp: waLink(bill.wa_to || booking.phone, bill, booking, link) });
   }
 
   const resend = pathname.match(/^\/api\/driver\/bills\/(\d+)\/send$/);
@@ -362,7 +366,7 @@ async function api(req, res, url) {
     if (!bill) throw new HttpError(404, 'No bill for this ride');
     const booking = db.prepare('SELECT * FROM bookings WHERE id=?').get(bill.booking_id);
     const link = `${baseUrl(req)}/bill/${bill.token}`;
-    return send(res, 200, { link, whatsapp: waLink(booking.phone, bill, booking, link) });
+    return send(res, 200, { link, whatsapp: waLink(bill.wa_to || booking.phone, bill, booking, link) });
   }
 
   throw new HttpError(404, 'Not found');

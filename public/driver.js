@@ -193,6 +193,7 @@ function readItems() {
   const f = $('#billForm'), n = (v) => Number(v) || 0, items = [];
   if (billMode === 'fixed') {
     if (n(f.famt.value) > 0) items.push({ description: f.fdesc.value.trim() || 'Cab fare', qty: 1, rate: n(f.famt.value) });
+    if (items.length && n(f.ftoll.value) > 0) items.push({ description: 'Toll', qty: 1, rate: n(f.ftoll.value) });
     return items;
   }
   if (n(f.base.value) > 0) items.push({ description: 'Base fare', qty: 1, rate: n(f.base.value) });
@@ -223,7 +224,7 @@ $('#billForm').addEventListener('submit', async (e) => {
   if (!items.length) return err(billMode === 'fixed' ? 'Enter the fare amount.' : 'Enter distance and rate, a base fare, or at least one extra.');
   $('#billSave').disabled = true;
   try {
-    const payload = { items, tax_percent: f.tax.value, payment_method: f.pay.value, whatsapp_to: f.wa.value };
+    const payload = { items, tax_percent: f.tax.value, whatsapp_to: f.wa.value };
     if (billBooking) payload.booking_id = billBooking.id;
     else payload.customer = { name: f.cname.value, phone: f.wa.value, pickup: f.cpick.value, dropoff: f.cdrop.value };
     const r = await api('/api/driver/bills', 'POST', payload);
