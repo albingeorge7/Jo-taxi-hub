@@ -60,7 +60,7 @@ function rideCard(b, { actions = true } = {}) {
   if (actions) {
     if (b.status === 'pending') a.push(`<button class="btn sm green" data-act="confirmed" data-id="${b.id}">${ic('check')}Accept</button><button class="btn sm red" data-act="rejected" data-id="${b.id}">${ic('x')}Reject</button>`);
     if (b.status === 'confirmed') a.push(`<button class="btn sm green" data-bill="${b.id}">${ic('receipt')}Complete &amp; bill</button><button class="btn sm sec" data-act="cancelled" data-id="${b.id}">${ic('x')}Cancel</button>`);
-    if (b.status === 'completed' && b.bill_token) a.push(`<button class="btn sm green" data-pdf="${b.bill_token}" data-name="Bill-${esc(b.ref)}.pdf" data-id="${b.id}">${ic('file')}Send PDF</button><a class="btn sm sec" target="_blank" href="/bill/${b.bill_token}">${ic('receipt')}View bill</a><button class="btn sm sec" data-resend="${b.id}">${ic('send')}Send link</button>`);
+    if (b.status === 'completed' && b.bill_token) a.push(`<button class="btn sm green" data-pdf="${b.bill_token}" data-name="Invoice-${esc(b.ref)}.pdf" data-id="${b.id}">${ic('file')}Send PDF</button><a class="btn sm sec" target="_blank" href="/bill/${b.bill_token}">${ic('receipt')}View bill</a><button class="btn sm sec" data-resend="${b.id}">${ic('send')}Send link</button>`);
     if (b.status === 'completed' && !b.bill_token) a.push(`<button class="btn sm green" data-bill="${b.id}">${ic('receipt')}Generate bill</button>`);
   }
   return `<div class="card ride st-${b.status}"><div class="top"><div class="route">${esc(b.pickup)} &rarr; ${esc(b.dropoff)}</div><span class="badge s-${b.status}">${b.status}</span></div>
@@ -308,11 +308,11 @@ $('#billForm').addEventListener('submit', async (e) => {
     const r = await api('/api/driver/bills', 'POST', payload);
     $('#billSave').classList.add('hidden');
     $('#billMsg').innerHTML = `<div class="msg ok">${ic('check')}<div>Bill ${esc(r.bill.number)} created &mdash; ${money(r.bill.total)}</div></div>
-      <button type="button" class="btn green block" id="sendPdf" data-pdf="${r.bill.token}" data-name="Bill-${esc(r.bill.number)}.pdf" data-wa="${esc(r.whatsapp)}">${ic('file')}Send PDF on WhatsApp</button>
+      <button type="button" class="btn green block" id="sendPdf" data-pdf="${r.bill.token}" data-name="Invoice-${esc(r.bill.number)}.pdf" data-wa="${esc(r.whatsapp)}">${ic('file')}Send PDF on WhatsApp</button>
       <div class="muted" style="font-size:12.5px;margin:6px 0">Opens your phone's share sheet with the PDF attached &mdash; choose WhatsApp, then the customer's chat.</div>
       <div class="actions" style="margin-top:8px"><a class="btn sm sec" target="_blank" rel="noopener" href="${r.whatsapp}">${ic('whatsapp')}Send link only</a><a class="btn sm sec" target="_blank" href="${r.link}">${ic('receipt')}Open bill</a><button type="button" class="btn sm sec" id="copyLink" data-link="${esc(r.link)}">Copy link</button></div>`;
     $('#billMsg').scrollIntoView({ block: 'end', behavior: 'smooth' });
-    getPdf(r.bill.token, `Bill-${r.bill.number}.pdf`).catch(() => {}); // preload so the share sheet opens instantly
+    getPdf(r.bill.token, `Invoice-${r.bill.number}.pdf`).catch(() => {}); // preload so the share sheet opens instantly
     await refresh();
   } catch (e2) { err(e2.message); $('#billSave').disabled = false; }
 });

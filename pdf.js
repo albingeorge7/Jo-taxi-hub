@@ -24,8 +24,8 @@ const when = (iso, opts) => new Date(iso).toLocaleString('en-GB', { timeZone: co
 
 export function buildBillPdf(bill, booking) {
   const b = config.business;
-  const TINT = '1 0.902 0.6', GOLD = '0.498 0.376 0', RULE = '0.96 0.82 0.38', BORDER = '0.75 0.75 0.75', SEP = '0.89 0.89 0.89';
-  const INK = '0.07 0.07 0.07', GREY = '0.35 0.35 0.35', YEL = '1 0.902 0', BLACK = '0 0 0';
+  const TINT = '0.91 0.933 0.984', GOLD = '0.882 0.114 0.165', RULE = '0.882 0.114 0.165', BORDER = '0.765 0.804 0.89', SEP = '0.902 0.922 0.961', NAVY = '0.071 0.188 0.42', NAVY_D = '0.043 0.122 0.29';
+  const INK = '0.07 0.09 0.15', GREY = '0.35 0.4 0.47', WHITE = '1 1 1', RED = '0.882 0.114 0.165';
   const paidBy = ['cash', 'card'].includes(String(bill.payment_method || '').toLowerCase()) ? bill.payment_method : '';
   const hasTrip = !(booking.pickup === '—' && booking.dropoff === '—');
   const M = 44, R = W - M;
@@ -46,24 +46,24 @@ export function buildBillPdf(bill, booking) {
   };
   const taxiIcon = (x0, t0, s) => {                 // little taxi, drawn from simple shapes
     const X = (x) => x0 + x * s, T = (y) => t0 + y * s;
-    poly([[23, 2], [41, 2], [41, 11], [23, 11]].map(([x, y]) => [X(x), T(y)]), YEL, BLACK, 1.2);
-    text('TAXI', X(32), T(8.6), { size: 5.2 * s, font: 'F2', align: 'center' });
-    poly([[8, 24], [12, 15], [14, 12], [50, 12], [52, 15], [56, 24], [56, 45], [8, 45]].map(([x, y]) => [X(x), T(y)]), YEL, BLACK, 1.8);
-    poly([[15, 24], [18, 17], [46, 17], [49, 24]].map(([x, y]) => [X(x), T(y)]), BLACK, BLACK, 0.5);
-    circle(X(17), T(35), 3.2 * s, BLACK); circle(X(47), T(35), 3.2 * s, BLACK);
-    circle(X(18), T(50), 6 * s, BLACK); circle(X(46), T(50), 6 * s, BLACK);
+    poly([[23, 2], [41, 2], [41, 11], [23, 11]].map(([x, y]) => [X(x), T(y)]), WHITE, NAVY_D, 1.2);
+    text('TAXI', X(32), T(8.6), { size: 5.2 * s, font: 'F2', rgb: NAVY_D, align: 'center' });
+    poly([[8, 24], [12, 15], [14, 12], [50, 12], [52, 15], [56, 24], [56, 45], [8, 45]].map(([x, y]) => [X(x), T(y)]), RED, NAVY_D, 1.8);
+    poly([[15, 24], [18, 17], [46, 17], [49, 24]].map(([x, y]) => [X(x), T(y)]), NAVY_D, NAVY_D, 0.5);
+    circle(X(17), T(35), 3.2 * s, WHITE); circle(X(47), T(35), 3.2 * s, WHITE);
+    circle(X(18), T(50), 6 * s, NAVY_D); circle(X(46), T(50), 6 * s, NAVY_D);
   };
 
-  // ---- first page header: icon + company on the left, BILL + invoice table on the right ----
+  // ---- first page header: icon + company on the left, INVOICE + number/date table on the right ----
   addPage();
   taxiIcon(M, 34, 0.95);
   text(b.name, M, 122, { size: 20 });
   const contact = [b.driverName, b.address, b.email, b.phone, b.licence ? `Vehicle: ${b.licence}` : ''].filter(Boolean);
   contact.forEach((l, i) => text(l, M, 146 + i * 15, { size: 10, rgb: '0.15 0.15 0.15' }));
-  text('BILL', R, 80, { size: 38, font: 'F2', rgb: GOLD, align: 'right' });
+  text('INVOICE', R, 80, { size: 34, font: 'F2', rgb: GOLD, align: 'right' });
   const mx = 330, c1 = 135, c2 = R - mx - c1;
   rect(mx, 112, R - mx, 24, TINT);
-  text('Invoice #', mx + c1 / 2, 128, { size: 10.5, font: 'F2', align: 'center' }); text('Date', mx + c1 + c2 / 2, 128, { size: 10.5, font: 'F2', align: 'center' });
+  text('Invoice #', mx + c1 / 2, 128, { size: 10.5, font: 'F2', rgb: NAVY, align: 'center' }); text('Date', mx + c1 + c2 / 2, 128, { size: 10.5, font: 'F2', rgb: NAVY, align: 'center' });
   text(bill.number, mx + c1 / 2, 154, { size: 10.5, font: 'F2', align: 'center' });
   text(when(bill.created_at, { day: '2-digit', month: '2-digit', year: 'numeric' }), mx + c1 + c2 / 2, 154, { size: 10.5, font: 'F2', align: 'center' });
   text(`Booking ref: ${booking.ref}`, R, 176, { size: 9, rgb: GREY, align: 'right' });
@@ -71,9 +71,9 @@ export function buildBillPdf(bill, booking) {
 
   // ---- Bill to / Trip ----
   const gap = 28, cw = (R - M - gap) / 2, rx = M + cw + gap;
-  text('Bill to', M + 4, y, { size: 13, font: 'F2' }); line(M, y + 8, M + cw, y + 8, RULE, 2);
+  text('Bill to', M + 4, y, { size: 13, font: 'F2', rgb: NAVY }); line(M, y + 8, M + cw, y + 8, RULE, 2);
   text(fit(booking.name, 11, cw - 8, true), M + 4, y + 28, { size: 11, font: 'F2' }); text(booking.phone, M + 4, y + 44, { size: 10.5 });
-  text(hasTrip ? 'Trip' : 'Date', rx + 4, y, { size: 13, font: 'F2' }); line(rx, y + 8, rx + cw, y + 8, RULE, 2);
+  text(hasTrip ? 'Trip' : 'Date', rx + 4, y, { size: 13, font: 'F2', rgb: NAVY }); line(rx, y + 8, rx + cw, y + 8, RULE, 2);
   let ty = y + 28;
   if (hasTrip) {
     const fromL = wrap(booking.pickup, 10.5, cw - 52, 2), toL = wrap(booking.dropoff, 10.5, cw - 52, 2);
@@ -86,10 +86,10 @@ export function buildBillPdf(bill, booking) {
   // ---- items table (bordered, flows onto more pages) ----
   const amtX = R - 118, BOTTOM = H - 58;
   let segTop = 0;
-  const openTable = () => { segTop = y; rect(M, y, R - M, 26, TINT); text('Description', M + 10, y + 17, { size: 11.5 }); text('Amount', R - 10, y + 17, { size: 11.5, align: 'right' }); line(M, y + 26, R, y + 26, BORDER, 0.8); y += 26; };
+  const openTable = () => { segTop = y; rect(M, y, R - M, 26, TINT); text('Description', M + 10, y + 17, { size: 11.5, font: 'F2', rgb: NAVY }); text('Amount', R - 10, y + 17, { size: 11.5, font: 'F2', rgb: NAVY, align: 'right' }); line(M, y + 26, R, y + 26, BORDER, 0.8); y += 26; };
   const closeTable = () => { frame(M, segTop, R - M, y - segTop); line(amtX, segTop, amtX, y, BORDER, 0.8); };
   const compactHeader = () => {
-    text(b.name, M, 44, { size: 15 }); text(`BILL ${bill.number}  (continued)`, R, 44, { size: 10, font: 'F2', rgb: GOLD, align: 'right' });
+    text(b.name, M, 44, { size: 15 }); text(`INVOICE ${bill.number}  (continued)`, R, 44, { size: 10, font: 'F2', rgb: GOLD, align: 'right' });
     line(M, 54, R, 54, RULE, 1.6); return 84;
   };
   openTable();
@@ -109,13 +109,13 @@ export function buildBillPdf(bill, booking) {
   text('Subtotal', tx + 10, y, { size: 10.5 }); text(money(bill.subtotal), R - 10, y, { size: 10.5, align: 'right' }); y += 19;
   if (bill.tax_percent) { text(`Tax (${+bill.tax_percent}%)`, tx + 10, y, { size: 10.5 }); text(money(bill.tax), R - 10, y, { size: 10.5, align: 'right' }); y += 19; }
   rect(tx, y - 8, R - tx, 32, TINT); frame(tx, y - 8, R - tx, 32);
-  text('Total', tx + 10, y + 13, { size: 12.5, font: 'F2' }); text(money(bill.total), R - 10, y + 13, { size: 14, font: 'F2', align: 'right' });
+  text('Total', tx + 10, y + 13, { size: 12.5, font: 'F2', rgb: NAVY }); text(money(bill.total), R - 10, y + 13, { size: 14, font: 'F2', rgb: NAVY, align: 'right' });
   if (paidBy) text(`Paid by ${paidBy}. Thank you!`, M + 4, y + 13, { size: 10.5 });
   y += 70;
-  text('Thank you for your business!', W / 2, y, { size: 12, align: 'center' });
+  text('Thank you for your business!', W / 2, y, { size: 12, rgb: NAVY, align: 'center' });
 
   // ---- tiny footer on every page ----
-  pages.forEach((pg, i) => { ops = pg; text(`Computer-generated bill${pages.length > 1 ? `  |  Page ${i + 1} of ${pages.length}` : ''}`, W / 2, H - 26, { size: 8, rgb: '0.55 0.55 0.55', align: 'center' }); });
+  pages.forEach((pg, i) => { ops = pg; text(`Computer-generated invoice${pages.length > 1 ? `  |  Page ${i + 1} of ${pages.length}` : ''}`, W / 2, H - 26, { size: 8, rgb: '0.55 0.55 0.55', align: 'center' }); });
 
   // ---- assemble PDF ----
   const N = pages.length, objs = [

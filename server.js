@@ -280,7 +280,7 @@ async function api(req, res, url) {
     const booking = db.prepare('SELECT * FROM bookings WHERE id=?').get(bill.booking_id);
     if (billPage[2]) {
       const pdf = buildBillPdf(bill, booking);
-      res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Length': pdf.length, 'Content-Disposition': `inline; filename="Bill-${bill.number}.pdf"`, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+      res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Length': pdf.length, 'Content-Disposition': `inline; filename="Invoice-${bill.number}.pdf"`, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
       return res.end(pdf);
     }
     return send(res, 200, renderBill(bill, booking), { 'Cache-Control': 'no-store' });

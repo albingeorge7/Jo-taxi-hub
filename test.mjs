@@ -95,11 +95,18 @@ assert.deepEqual(vs.range.sources.map((s) => s.label).sort(), ['card', 'whatsapp
 assert.equal(vs.range.devices[0].label, 'mobile');
 assert.equal(vs.range.totals.conversion, 100, 'booked / visitors');
 
+// Expectations are computed from the ride list, so they hold at any time of day (a ride booked "in an hour" can
+// fall on tomorrow's date, which a range ending today correctly leaves out).
+const istDay = (d) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date(d));   // business timezone
+const todayIst = istDay(Date.now());
+const doneRides = (await j('/api/driver/bookings', 'GET', null, cookie)).data.filter((x) => x.status === 'completed' && istDay(x.pickup_at) <= todayIst);
+const sumFare = (l) => Math.round(l.reduce((s, x) => s + (x.fare || 0), 0) * 100) / 100;
 const st = (await j('/api/driver/stats', 'GET', null, cookie)).data;
-assert.equal(st.range.preset, '30d'); assert.equal(st.range.totals.completed, 3); assert.equal(st.range.totals.revenue, 3799.5);
+assert.equal(st.range.preset, '30d'); assert.equal(st.range.totals.completed, doneRides.length); assert.equal(st.range.totals.revenue, sumFare(doneRides));
 const sj = (q) => j('/api/driver/stats?' + q, 'GET', null, cookie);
-assert.equal((await sj('preset=all')).data.range.totals.revenue, 3799.5);
-assert.equal((await sj('preset=today')).data.range.totals.completed, 3, 'rides billed today fall in today');
+assert.equal((await sj('preset=all')).data.range.totals.revenue, sumFare(doneRides), 'all-time revenue');
+const todays = doneRides.filter((x) => istDay(x.pickup_at) === todayIst);
+assert.equal((await sj('preset=today')).data.range.totals.completed, todays.length, 'rides dated today fall in today');
 const old = (await sj('preset=custom&from=2020-01-01&to=2020-01-31')).data; assert.equal(old.range.totals.revenue, 0); assert.equal(old.range.days, 31);
 assert.equal((await sj('preset=custom&from=2020-02-01&to=2020-01-01')).status, 400, 'reversed range rejected');
 assert.equal((await sj('preset=custom&from=nope&to=2020-01-01')).status, 400);
@@ -168,7 +175,8 @@ assert.equal((await hb('preset=custom&from=2026-09-16&to=2026-09-30')).length, 0
 assert.equal((await hb('preset=custom&from=2026-09-15&to=2026-09-15')).length, 1, 'single day range is inclusive');
 assert.ok((await hb('q=Old%20Trip')).length === 1 && (await hb('q=9847011155')).length === 1, 'search by name and phone');
 assert.equal((await hb('q=%25')).length, 0, 'wildcards in search are escaped');
-assert.ok((await hb('preset=today')).length >= 3 && (await hb('preset=today')).every((x) => x.bill_number !== undefined), 'today preset; bill number included');
+const todayRows = await hb('preset=today');
+assert.ok(todayRows.length >= 1 && todayRows.every((x) => istDay(x.pickup_at) === istDay(Date.now()) && x.bill_number !== undefined), 'today preset returns only today\'s rides; bill number included');
 assert.equal((await j('/api/driver/bookings?preset=custom&from=bad&to=2026-01-01', 'GET', null, ck2)).status, 400);
 // the customer page must actually send the visit beacon (a past edit silently dropped it)
 const appJs = await (await fetch(base + '/app.js')).text();
@@ -192,5 +200,12 @@ const bigPdf = await (async () => Buffer.from(await (await fetch(big.data.link.r
 assert.ok(/\/Count [2-9]/.test(bigPdf), 'a 20-line bill continues on further PDF pages');
 assert.ok(bigPdf.includes('continued'), 'continuation pages carry a compact header');
 const bigHtml = await (await fetch(big.data.link.replace(/^https?:\/\/[^/]+/, base))).text();
-assert.ok(['<h1>BILL</h1>', 'Invoice #', 'Bill to', '>Description<', '>Amount<', 'Thank you for your business!', 'Booking ref'].every((s) => bigHtml.includes(s)), 'receipt-style layout');
+assert.ok(['<h1>INVOICE</h1>', 'Invoice #', 'Bill to', '>Description<', '>Amount<', 'Thank you for your business!', 'Booking ref'].every((s) => bigHtml.includes(s)), 'receipt-style layout');
+// "Invoice" wording on the document, message and file name
+assert.ok(decodeURIComponent(big.data.whatsapp).includes('Invoice INV-') && decodeURIComponent(big.data.whatsapp).includes('View invoice'), 'WhatsApp message says Invoice');
+assert.ok(!decodeURIComponent(big.data.whatsapp).includes('*Bill '), 'no old Bill label in the message');
+assert.ok(bigPdf.includes('INVOICE'), 'PDF title says INVOICE');
+const pdfHead = await fetch(big.data.link.replace(/^https?:\/\/[^/]+/, base) + '.pdf');
+assert.ok((pdfHead.headers.get('content-disposition') || '').includes('Invoice-INV-'), 'PDF file name starts with Invoice-');
+assert.ok(bigHtml.includes('<title>Invoice INV-'), 'page title says Invoice');
 console.log('All tests passed'); process.exit(0);
