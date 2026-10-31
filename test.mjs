@@ -52,8 +52,10 @@ assert.ok(html.includes('199.50') && html.includes('&lt;b&gt;Asha'), 'bill rende
 const man = await j('/api/driver/bills', 'POST', { customer: { name: 'Walk In', phone: '98470 11122', pickup: 'Aluva', dropoff: 'Munnar' }, items: [{ description: 'Cab fare', qty: 1, rate: 3500 }], whatsapp_to: '98470 11122' }, cookie);
 assert.equal(man.status, 201); assert.equal(man.data.bill.total, 3500);
 assert.ok(man.data.whatsapp.startsWith('https://wa.me/919847011122?text='));
-assert.equal((await j('/api/driver/bills', 'POST', { customer: { name: 'x', phone: 'abc' }, items: [{ description: 'f', qty: 1, rate: 5 }] }, cookie)).status, 400);
-assert.equal((await j('/api/driver/bills', 'POST', { customer: { phone: '9847011122' }, items: [{ description: 'f', qty: 1, rate: 0 }] }, cookie)).status, 400);
+for (const c of [{ phone: '9847011122', pickup: 'A', dropoff: 'B' }, { name: 'X', phone: '9847011122', dropoff: 'B' }, { name: 'X', phone: '9847011122', pickup: 'A' }])
+  assert.equal((await j('/api/driver/bills', 'POST', { customer: c, items: [{ description: 'f', qty: 1, rate: 5 }] }, cookie)).status, 400, 'name/pickup/drop mandatory');
+assert.equal((await j('/api/driver/bills', 'POST', { customer: { name: 'x', pickup: 'A', dropoff: 'B', phone: 'abc' }, items: [{ description: 'f', qty: 1, rate: 5 }] }, cookie)).status, 400);
+assert.equal((await j('/api/driver/bills', 'POST', { customer: { name: 'x', pickup: 'A', dropoff: 'B', phone: '9847011122' }, items: [{ description: 'f', qty: 1, rate: 0 }] }, cookie)).status, 400);
 assert.equal((await j('/api/driver/bookings', 'GET', null, cookie)).data.length, 2, 'failed bills leave no orphan bookings');
 
 const st = (await j('/api/driver/stats', 'GET', null, cookie)).data;

@@ -145,6 +145,7 @@ function openBill(b) { // b = booking, or null for a ride that was not booked on
   const f = $('#billForm'); f.reset();
   $('#billTitle').textContent = b ? 'Complete & bill' : 'New bill (walk-in / phone ride)';
   $('#custSummary').classList.toggle('hidden', !b); $('#custFields').classList.toggle('hidden', !!b);
+  ['cname', 'cpick', 'cdrop'].forEach((n) => (f[n].required = !b));
   if (b) { $('#custSummary').innerHTML = `${ic('user')} ${esc(b.name)} &bull; ${esc(b.pickup)} &rarr; ${esc(b.dropoff)} &bull; ${esc(b.ref)}`; f.wa.value = b.phone; }
   f.rate.value = info.ratePerKm || ''; f.base.value = info.baseFare || ''; f.tax.value = info.taxPercent || 0;
   $('#extraRows').innerHTML = '';
@@ -187,7 +188,7 @@ $('#billForm').addEventListener('submit', async (e) => {
   try {
     const payload = { items, tax_percent: f.tax.value, payment_method: f.pay.value, whatsapp_to: f.wa.value };
     if (billBooking) payload.booking_id = billBooking.id;
-    else payload.customer = { name: f.cname.value, phone: f.wa.value, pickup: f.ctrip.value.split(/\s*(?:→|->|\s+to\s+)\s*/i)[0] || '', dropoff: f.ctrip.value.split(/\s*(?:→|->|\s+to\s+)\s*/i)[1] || '' };
+    else payload.customer = { name: f.cname.value, phone: f.wa.value, pickup: f.cpick.value, dropoff: f.cdrop.value };
     const r = await api('/api/driver/bills', 'POST', payload);
     $('#billSave').classList.add('hidden');
     $('#billMsg').innerHTML = `<div class="msg ok">${ic('check')}<div>Bill ${esc(r.bill.number)} created &mdash; ${money(r.bill.total)}</div></div>

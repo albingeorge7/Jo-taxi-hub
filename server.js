@@ -254,10 +254,12 @@ async function api(req, res, url) {
       if (db.prepare('SELECT 1 FROM bills WHERE booking_id=?').get(booking.id)) throw new HttpError(409, 'A bill already exists for this ride');
     } else { // ride that was not booked through the website
       const c = b.customer || {};
-      const phone = clean(c.phone, 20);
+      const phone = clean(c.phone, 20), cname = clean(c.name, 80), pickup = clean(c.pickup, 200), dropoff = clean(c.dropoff, 200);
+      if (!cname) throw new HttpError(400, "Enter the customer's name");
+      if (!pickup || !dropoff) throw new HttpError(400, 'Enter the pickup and drop points');
       if (!/^\+?[0-9 ()-]{7,20}$/.test(phone)) throw new HttpError(400, "Enter the customer's WhatsApp number");
       const info = db.prepare(`INSERT INTO bookings (ref,name,phone,pickup,dropoff,pickup_at,passengers,status,source) VALUES (?,?,?,?,?,?,1,'completed','manual')`)
-        .run(newRef(), clean(c.name, 80) || 'Customer', phone, clean(c.pickup, 200) || '—', clean(c.dropoff, 200) || '—', new Date().toISOString());
+        .run(newRef(), cname, phone, pickup, dropoff, new Date().toISOString());
       booking = db.prepare('SELECT * FROM bookings WHERE id=?').get(info.lastInsertRowid);
     }
     const token = crypto.randomBytes(16).toString('hex');
