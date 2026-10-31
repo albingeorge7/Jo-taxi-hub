@@ -338,7 +338,8 @@ function serveStatic(req, res, pathname) {
   if (!file.startsWith(PUBLIC + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) throw new HttpError(404, 'Not found');
   const ext = path.extname(file);
   const headers = { 'Content-Type': MIME[ext] || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff' };
-  if (file.endsWith('driver.html')) headers['Cache-Control'] = 'no-store';
+  // Always revalidate code and pages so an update never mixes old scripts with new HTML.
+  headers['Cache-Control'] = ['.html', '.js', '.css'].includes(ext) ? 'no-cache, must-revalidate' : 'public, max-age=86400';
   res.writeHead(200, headers);
   fs.createReadStream(file).pipe(res);
 }
