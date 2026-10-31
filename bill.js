@@ -6,7 +6,7 @@ const when = (iso, opts = { dateStyle: 'medium', timeStyle: 'short' }) => new Da
 
 export function billMessage(bill, booking, link) {
   const trip = booking.pickup === '—' && booking.dropoff === '—' ? '' : ` for your trip ${booking.pickup} → ${booking.dropoff}`;
-  return `Hello ${booking.name},\n\nThank you for riding with ${config.business.name}.\nBill ${bill.number}${trip}: total ${money(bill.total)}.\n\nView / print your bill: ${link}\n\n${config.business.driverName}, ${config.business.phone}`;
+  return `Hello ${booking.name},\n\nThank you for riding with ${config.business.name}.\nBill ${bill.number}${trip}: total ${money(bill.total)}.\n\nView / print your bill: ${link}\nPDF: ${link}.pdf\n\n${config.business.driverName}, ${config.business.phone}`;
 }
 
 export function renderBill(bill, booking) {

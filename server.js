@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import config from './config.js';
 import { renderBill, billMessage } from './bill.js';
+import { buildBillPdf } from './pdf.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(__dirname, 'public');
@@ -40,6 +41,23 @@ CREATE TABLE IF NOT EXISTS bills (
 CREATE INDEX IF NOT EXISTS idx_bookings_pickup ON bookings(pickup_at);
 CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
 `);
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS visits (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  day TEXT NOT NULL,                 -- YYYY-MM-DD in the business timezone
+  vh TEXT NOT NULL,                  -- anonymous per-day visitor hash (no IP stored)
+  source TEXT NOT NULL, device TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_visits_day ON visits(day);
+`);
+const SALT = (() => {
+  const f = path.join(DATA_DIR, '.salt');
+  try { return fs.readFileSync(f, 'utf8'); } catch { const v = crypto.randomBytes(24).toString('hex'); fs.writeFileSync(f, v, { mode: 0o600 }); return v; }
+})();
+const dayFmt = new Intl.DateTimeFormat('en-CA', { timeZone: config.timezone });
+const todayKey = () => dayFmt.format(new Date());
 
 for (const col of ['pickup_lat', 'pickup_lng', 'drop_lat', 'drop_lng']) {
   try { db.exec(`ALTER TABLE bookings ADD COLUMN ${col} REAL`); } catch { /* column exists */ }
@@ -79,6 +97,19 @@ function clientIp(req) {
     return String(req.headers['cf-connecting-ip'] || (req.headers['x-forwarded-for'] || '').split(',')[0] || a).trim();
   }
   return a;
+}
+function visitSource(ref, src, ownHost) {
+  const tag = src.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 20); // ?src=card on QR codes / business cards
+  if (tag) return tag;
+  let host = '';
+  try { host = new URL(ref).hostname.replace(/^www\./, ''); } catch { /* no referrer */ }
+  if (!host || host === String(ownHost).split(':')[0]) return 'direct';
+  if (/wa\.me|whatsapp/.test(host)) return 'whatsapp';
+  if (/google\./.test(host)) return 'google';
+  if (/facebook|fb\.com|^l\.messenger/.test(host)) return 'facebook';
+  if (/instagram/.test(host)) return 'instagram';
+  if (/(^|\.)t\.co$|twitter|(^|\.)x\.com$/.test(host)) return 'x';
+  return host.slice(0, 40);
 }
 const hits = new Map();
 function rateLimit(req, key, max, windowMs) {
@@ -194,12 +225,32 @@ async function api(req, res, url) {
     return send(res, 200, publicBooking(row));
   }
 
-  // public bill page
-  const billPage = pathname.match(/^\/bill\/([a-f0-9]{32})$/);
+  // anonymous visit counter (called once per browser session by the customer site)
+  if (m === 'POST' && pathname === '/api/visit') {
+    rateLimit(req, 'visit', 120, 3600e3);
+    const v = await readJson(req);
+    const ua = String(req.headers['user-agent'] || '');
+    if (!isDriver(req) && ua && !/bot|crawl|spider|slurp|preview|monitor|uptime|curl|wget|python|headless|lighthouse/i.test(ua)) {
+      const day = todayKey();
+      const vh = crypto.createHmac('sha256', SALT).update(`${day}|${clientIp(req)}|${ua}`).digest('hex').slice(0, 24);
+      db.prepare('INSERT INTO visits (day,vh,source,device) VALUES (?,?,?,?)')
+        .run(day, vh, visitSource(clean(v.ref, 300), clean(v.src, 30), req.headers.host), /ipad|tablet/i.test(ua) ? 'tablet' : /mobi|android|iphone/i.test(ua) ? 'mobile' : 'desktop');
+    }
+    res.writeHead(204); return res.end();
+  }
+
+  // public bill page (HTML) and PDF
+
+  const billPage = pathname.match(/^\/bill\/([a-f0-9]{32})(\.pdf)?$/);
   if (m === 'GET' && billPage) {
     const bill = loadBill(db.prepare('SELECT * FROM bills WHERE token=?').get(billPage[1]));
     if (!bill) throw new HttpError(404, 'Bill not found');
     const booking = db.prepare('SELECT * FROM bookings WHERE id=?').get(bill.booking_id);
+    if (billPage[2]) {
+      const pdf = buildBillPdf(bill, booking);
+      res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Length': pdf.length, 'Content-Disposition': `inline; filename="Bill-${bill.number}.pdf"`, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+      return res.end(pdf);
+    }
     return send(res, 200, renderBill(bill, booking), { 'Cache-Control': 'no-store' });
   }
 
@@ -347,6 +398,7 @@ function stats(query = {}) {
     pending: all.filter((b) => b.status === 'pending').length,
     todayRides: all.filter((b) => b.day === today && ['confirmed', 'completed'].includes(b.status)).length,
     revenueToday: revenue(done.filter((b) => b.day === today)),
+    visitsToday: db.prepare('SELECT COUNT(*) c FROM visits WHERE day=?').get(today).c,
   };
 
   // numbers for the selected date range (by ride date; request volume by the date it was made)
@@ -357,11 +409,16 @@ function stats(query = {}) {
   const monthly = days > 92; // long ranges are shown one bar per month
   const bucket = (day) => (monthly ? day.slice(0, 7) : day);
   const series = {};
-  for (let i = 0; i < days; i++) series[bucket(ymd(dayMs(range.from) + i * DAY))] ||= { rides: 0, revenue: 0, bookings: 0 };
+  for (let i = 0; i < days; i++) series[bucket(ymd(dayMs(range.from) + i * DAY))] ||= { rides: 0, revenue: 0, bookings: 0, visits: 0, visitors: 0 };
   for (const b of all) {
-    if (b.created >= range.from && b.created <= range.to) series[bucket(b.created)].bookings++;
+    if (b.source === 'web' && b.created >= range.from && b.created <= range.to) series[bucket(b.created)].bookings++;
     if (b.status === 'completed' && b.day >= range.from && b.day <= range.to) { const e = series[bucket(b.day)]; e.rides++; e.revenue = round2(e.revenue + (b.fare || 0)); }
   }
+  const vrows = db.prepare('SELECT day, COUNT(*) v, COUNT(DISTINCT vh) u FROM visits WHERE day BETWEEN ? AND ? GROUP BY day').all(range.from, range.to);
+  for (const r of vrows) { const e = series[bucket(r.day)]; e.visits += r.v; e.visitors += r.u; }
+  const visitsTotal = vrows.reduce((a, r) => a + r.v, 0), visitorsTotal = vrows.reduce((a, r) => a + r.u, 0);
+  const group = (col) => db.prepare(`SELECT ${col} AS label, COUNT(*) n FROM visits WHERE day BETWEEN ? AND ? GROUP BY ${col} ORDER BY n DESC LIMIT 8`).all(range.from, range.to);
+  const webBookings = all.filter((b) => b.source === 'web' && b.created >= range.from && b.created <= range.to).length;
   const hours = Array(24).fill(0);
   for (const b of inRange) if (b.status !== 'cancelled' && b.status !== 'rejected') hours[Number(hourFmt.format(new Date(b.pickup_at))) % 24]++;
   const top = (key) => {
@@ -380,7 +437,10 @@ function stats(query = {}) {
         avgFare: rdone.length ? round2(revenue(rdone) / rdone.length) : 0,
         completionRate: decided ? Math.round(byStatus.completed / decided * 100) : null,
         repeatCustomers: Object.values(customers).filter((n) => n > 1).length,
+        visits: visitsTotal, visitors: visitorsTotal, webBookings,
+        conversion: visitorsTotal ? Math.round(webBookings / visitorsTotal * 1000) / 10 : null,
       },
+      sources: group('source'), devices: group('device'),
       daily: Object.entries(series).map(([date, v]) => ({ date, ...v })),
       byStatus, hours, topPickups: top('pickup'), topDrops: top('dropoff'),
     },

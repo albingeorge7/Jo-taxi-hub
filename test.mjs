@@ -60,6 +60,28 @@ assert.equal((await j('/api/driver/bills', 'POST', { customer: { name: 'x', pick
 assert.equal((await j('/api/driver/bills', 'POST', { customer: { name: 'x', pickup: 'A', dropoff: 'B', phone: '9847011122' }, items: [{ description: 'f', qty: 1, rate: 0 }] }, cookie)).status, 400);
 assert.equal((await j('/api/driver/bookings', 'GET', null, cookie)).data.length, 2, 'failed bills leave no orphan bookings');
 
+// PDF bill
+const pdfRes = await fetch(bill.data.link.replace(/^https?:\/\/[^/]+/, base) + '.pdf');
+const pdfBuf = Buffer.from(await pdfRes.arrayBuffer());
+assert.equal(pdfRes.headers.get('content-type'), 'application/pdf');
+assert.ok(pdfBuf.subarray(0, 5).toString() === '%PDF-' && pdfBuf.toString('latin1').includes('%%EOF') && pdfBuf.toString('latin1').includes('Rs.199.50'), 'valid PDF with total');
+assert.ok(bill.data.whatsapp.includes(encodeURIComponent('.pdf')), 'WhatsApp message links the PDF');
+assert.equal((await fetch(base + '/bill/' + 'a'.repeat(32) + '.pdf')).status, 404);
+
+// visit counter: anonymous, de-duplicated per day, ignores bots and the driver
+const visit = (body, ua, ck) => j('/api/visit', 'POST', body, ck, { 'User-Agent': ua, 'CF-Connecting-IP': '8.8.8.8' });
+const phoneUa = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) Mobile Safari/604.1';
+assert.equal((await visit({ ref: 'https://wa.me/x', src: '' }, phoneUa)).status, 204);
+assert.equal((await visit({ ref: '', src: 'Card!' }, phoneUa)).status, 204);
+await visit({}, 'Googlebot/2.1'); await visit({}, phoneUa, cookie);
+const vs = (await j('/api/driver/stats', 'GET', null, cookie)).data;
+assert.equal(vs.range.totals.visits, 2, 'bots and the driver are not counted');
+assert.equal(vs.range.totals.visitors, 1, 'same visitor counted once per day');
+assert.equal(vs.totals.visitsToday, 2);
+assert.deepEqual(vs.range.sources.map((s) => s.label).sort(), ['card', 'whatsapp']);
+assert.equal(vs.range.devices[0].label, 'mobile');
+assert.equal(vs.range.totals.conversion, 100, 'booked / visitors');
+
 const st = (await j('/api/driver/stats', 'GET', null, cookie)).data;
 assert.equal(st.range.preset, '30d'); assert.equal(st.range.totals.completed, 2); assert.equal(st.range.totals.revenue, 3699.5);
 const sj = (q) => j('/api/driver/stats?' + q, 'GET', null, cookie);

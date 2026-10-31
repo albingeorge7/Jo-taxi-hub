@@ -145,3 +145,12 @@ $('#mapLocate').onclick = () => {
   $('#mapPicked').textContent = 'Getting your location…';
   navigator.geolocation.getCurrentPosition((p) => pinFromMap(p.coords.latitude, p.coords.longitude), () => ($('#mapPicked').textContent = 'Could not get your location. Please allow location access, or tap the map.'), { enableHighAccuracy: true, timeout: 10000 });
 };
+
+// anonymous visit counter: once per browser session (no cookies, no personal data)
+try {
+  if (!sessionStorage.getItem('visited')) {
+    sessionStorage.setItem('visited', '1');
+    fetch('/api/visit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
+      body: JSON.stringify({ ref: document.referrer, src: new URLSearchParams(location.search).get('src') || '' }) }).catch(() => {});
+  }
+} catch { /* storage blocked: skip counting */ }

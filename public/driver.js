@@ -60,7 +60,7 @@ function rideCard(b, { actions = true } = {}) {
   if (actions) {
     if (b.status === 'pending') a.push(`<button class="btn sm green" data-act="confirmed" data-id="${b.id}">${ic('check')}Accept</button><button class="btn sm red" data-act="rejected" data-id="${b.id}">${ic('x')}Reject</button>`);
     if (b.status === 'confirmed') a.push(`<button class="btn sm green" data-bill="${b.id}">${ic('receipt')}Complete &amp; bill</button><button class="btn sm sec" data-act="cancelled" data-id="${b.id}">${ic('x')}Cancel</button>`);
-    if (b.status === 'completed' && b.bill_token) a.push(`<a class="btn sm sec" target="_blank" href="/bill/${b.bill_token}">${ic('receipt')}View bill</a><button class="btn sm sec" data-resend="${b.id}">${ic('send')}Re-send</button>`);
+    if (b.status === 'completed' && b.bill_token) a.push(`<button class="btn sm green" data-pdf="${b.bill_token}" data-name="Bill-${esc(b.ref)}.pdf" data-id="${b.id}">${ic('file')}Send PDF</button><a class="btn sm sec" target="_blank" href="/bill/${b.bill_token}">${ic('receipt')}View bill</a><button class="btn sm sec" data-resend="${b.id}">${ic('send')}Send link</button>`);
     if (b.status === 'completed' && !b.bill_token) a.push(`<button class="btn sm green" data-bill="${b.id}">${ic('receipt')}Generate bill</button>`);
   }
   return `<div class="card ride st-${b.status}"><div class="top"><div class="route">${esc(b.pickup)} &rarr; ${esc(b.dropoff)}</div><span class="badge s-${b.status}">${b.status}</span></div>
@@ -92,7 +92,7 @@ const statTile = (icon, v, l, c = '') => `<div class="card stat ${c}"><div class
 function renderRequests() {
   const pend = bookings.filter((b) => b.status === 'pending').sort((a, b) => a.pickup_at.localeCompare(b.pickup_at));
   const t = stats.totals;
-  $('#tab-requests').innerHTML = `<div class="stats">${statTile('bell', t.pending, 'Awaiting reply')}${statTile('car', t.todayRides, 'Rides today', 'b')}${statTile('rupee', money(t.revenueToday), 'Earned today', 'g')}</div>
+  $('#tab-requests').innerHTML = `<div class="stats">${statTile('bell', t.pending, 'Awaiting reply')}${statTile('car', t.todayRides, 'Rides today', 'b')}${statTile('rupee', money(t.revenueToday), 'Earned today', 'g')}${statTile('eye', t.visitsToday, 'Site visits today')}</div>
     <h2 class="sec">${ic('bell')}New booking requests</h2>${pend.map((b) => rideCard(b)).join('') || '<p class="muted">No pending requests. You will be alerted here the moment someone books.</p>'}`;
 }
 
@@ -119,7 +119,8 @@ const prettyDate = (s) => new Date(s + 'T00:00:00').toLocaleDateString([], { day
 function renderAnalytics() {
   const r = stats.range, t = r.totals, d = r.daily, per = r.monthly ? 'per month' : 'per day';
   const maxRev = Math.max(1, ...d.map((x) => x.revenue)), maxBk = Math.max(1, ...d.map((x) => x.bookings));
-  const hmax = Math.max(1, ...r.hours);
+  const hmax = Math.max(1, ...r.hours), maxVis = Math.max(1, ...d.map((x) => x.visits));
+  const share = (arr) => { const tot = arr.reduce((a, x) => a + x.n, 0) || 1; return arr.map((x) => `<div class="hbar"><b>${x.n}</b><span style="min-width:84px">${esc(x.label)}</span><i style="display:block;height:8px;border-radius:4px;background:var(--navy);width:${Math.max(4, x.n / tot * 100)}px"></i><span class="muted">${Math.round(x.n / tot * 100)}%</span></div>`).join('') || '<span class="muted">No visits yet</span>'; };
   const list = (arr) => arr.map((x) => `<div class="hbar"><b>${x.n}×</b><span>${esc(x.label)}</span></div>`).join('') || '<span class="muted">No data in this period</span>';
   const chart = (icon, title, body, l1, l2) => `<div class="card chart" style="margin-bottom:12px"><h3>${ic(icon)}${title}</h3>${body}<div class="legend"><span>${l1}</span><span>${l2}</span></div></div>`;
   const keep = $('#rFrom') ? { from: $('#rFrom').value, to: $('#rTo').value } : null;
@@ -130,11 +131,14 @@ function renderAnalytics() {
     <div class="muted" style="font-size:13px">${ic('calendar')} Showing <b>${prettyDate(r.from)}</b> to <b>${prettyDate(r.to)}</b> (${r.days} day${r.days > 1 ? 's' : ''}${r.preset === 'custom' ? ', custom' : ''}) &middot; rides counted by pickup date</div>
   </div>
   <div class="stats">${statTile('rupee', money(t.revenue), 'Revenue')}${statTile('car', t.completed, 'Completed rides', 'b')}${statTile('list', t.bookings, 'Total bookings', 'b')}
-    ${statTile('receipt', money(t.avgFare), 'Average fare')}${statTile('check', (t.completionRate ?? '–') + (t.completionRate != null ? '%' : ''), 'Completion rate', 'g')}${statTile('users', t.repeatCustomers, 'Repeat customers', 'g')}</div>
+    ${statTile('receipt', money(t.avgFare), 'Average fare')}${statTile('check', (t.completionRate ?? '–') + (t.completionRate != null ? '%' : ''), 'Completion rate', 'g')}${statTile('users', t.repeatCustomers, 'Repeat customers', 'g')}
+    ${statTile('eye', t.visits, 'Site visits')}${statTile('users', t.visitors, 'Unique visitors', 'b')}${statTile('trend', (t.conversion ?? '–') + (t.conversion != null ? '%' : ''), 'Visitors who booked', 'g')}</div>
   ${chart('rupee', `Revenue ${per}`, `<div class="bars">${d.map((x) => `<div title="${x.date}: ${money(x.revenue)}" style="height:${x.revenue / maxRev * 100}%"></div>`).join('')}</div>`, d[0].date, d[d.length - 1].date)}
   ${chart('bell', `New booking requests ${per}`, `<div class="bars">${d.map((x) => `<div class="b2" title="${x.date}: ${x.bookings}" style="height:${x.bookings / maxBk * 100}%"></div>`).join('')}</div>`, d[0].date, d[d.length - 1].date)}
+  ${chart('eye', `Site visits ${per}`, `<div class="bars">${d.map((x) => `<div class="b2" title="${x.date}: ${x.visits} visits, ${x.visitors} visitors" style="height:${x.visits / maxVis * 100}%"></div>`).join('')}</div>`, d[0].date, d[d.length - 1].date)}
   ${chart('clock', 'Busiest pickup hours', `<div class="bars">${r.hours.map((n, h) => `<div title="${h}:00 – ${n} rides" style="height:${n / hmax * 100}%"></div>`).join('')}</div>`, '12am', '11pm')}
   <div class="grid"><div class="card chart"><h3>${ic('pin')}Top pickup spots</h3>${list(r.topPickups)}</div><div class="card chart"><h3>${ic('route')}Top destinations</h3>${list(r.topDrops)}</div>
+  <div class="card chart"><h3>${ic('eye')}Where visitors come from</h3>${share(r.sources)}</div><div class="card chart"><h3>${ic('phone')}Devices</h3>${share(r.devices)}</div>
   <div class="card chart"><h3>${ic('list')}Ride status</h3>${Object.entries(r.byStatus).map(([s, n]) => `<div class="hbar"><span class="badge s-${s}" style="min-width:92px;text-align:center">${s}</span> <b>${n}</b></div>`).join('')}</div></div>`;
 }
 async function setRange(next) {
@@ -225,11 +229,42 @@ $('#billForm').addEventListener('submit', async (e) => {
     const r = await api('/api/driver/bills', 'POST', payload);
     $('#billSave').classList.add('hidden');
     $('#billMsg').innerHTML = `<div class="msg ok">${ic('check')}<div>Bill ${esc(r.bill.number)} created &mdash; ${money(r.bill.total)}</div></div>
-      <a class="btn green block" target="_blank" rel="noopener" href="${r.whatsapp}">${ic('whatsapp')}Send bill on WhatsApp</a>
-      <div class="actions" style="margin-top:8px"><a class="btn sm sec" target="_blank" href="${r.link}">${ic('receipt')}Open bill</a><button type="button" class="btn sm sec" id="copyLink" data-link="${esc(r.link)}">Copy link</button></div>`;
+      <button type="button" class="btn green block" id="sendPdf" data-pdf="${r.bill.token}" data-name="Bill-${esc(r.bill.number)}.pdf" data-wa="${esc(r.whatsapp)}">${ic('file')}Send PDF on WhatsApp</button>
+      <div class="muted" style="font-size:12.5px;margin:6px 0">Opens your phone's share sheet with the PDF attached &mdash; choose WhatsApp, then the customer's chat.</div>
+      <div class="actions" style="margin-top:8px"><a class="btn sm sec" target="_blank" rel="noopener" href="${r.whatsapp}">${ic('whatsapp')}Send link only</a><a class="btn sm sec" target="_blank" href="${r.link}">${ic('receipt')}Open bill</a><button type="button" class="btn sm sec" id="copyLink" data-link="${esc(r.link)}">Copy link</button></div>`;
     $('#billMsg').scrollIntoView({ block: 'end', behavior: 'smooth' });
+    getPdf(r.bill.token, `Bill-${r.bill.number}.pdf`).catch(() => {}); // preload so the share sheet opens instantly
     await refresh();
   } catch (e2) { err(e2.message); $('#billSave').disabled = false; }
+});
+// ---------- send the bill PDF on WhatsApp ----------
+const pdfCache = {};
+async function getPdf(token, name) {
+  if (!pdfCache[token]) {
+    const r = await fetch(`/bill/${token}.pdf`);
+    if (!r.ok) throw new Error('Could not load the PDF');
+    pdfCache[token] = new File([await r.blob()], name, { type: 'application/pdf' });
+  }
+  return pdfCache[token];
+}
+async function sharePdf(token, name, getWaLink) {
+  let file; try { file = await getPdf(token, name); } catch (e) { return toast(esc(e.message)); }
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name, text: `Your bill from ${info.name}` }); return; }
+    catch (e) {
+      if (e.name === 'AbortError') return;
+      if (e.name === 'NotAllowedError') return toast('PDF is ready &mdash; tap Send PDF again.');
+    }
+  }
+  // no file sharing here (e.g. desktop): download the PDF and open the WhatsApp chat so it can be attached
+  const w = window.open('', '_blank');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; a.click();
+  try { const link = await getWaLink(); if (w) w.location = link; } catch { if (w) w.close(); }
+  toast('PDF downloaded. Attach it in the WhatsApp chat that opened.', 9000);
+}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-pdf]'); if (!b) return;
+  sharePdf(b.dataset.pdf, b.dataset.name, async () => b.dataset.wa || (await api(`/api/driver/bills/${b.dataset.id}/send`, 'POST', {})).whatsapp);
 });
 document.addEventListener('click', async (e) => {
   const c = e.target.closest('#copyLink'); if (!c) return;
