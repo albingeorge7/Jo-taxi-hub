@@ -64,7 +64,7 @@ function rideCard(b, { actions = true } = {}) {
     if (b.status === 'completed' && !b.bill_token) a.push(`<button class="btn sm green" data-bill="${b.id}">${ic('receipt')}Generate bill</button>`);
   }
   return `<div class="card ride st-${b.status}"><div class="top"><div class="route">${esc(b.pickup)} &rarr; ${esc(b.dropoff)}</div><span class="badge s-${b.status}">${b.status}</span></div>
-  <div class="meta"><span>${ic('calendar')}${when(b.pickup_at)}</span><span>${ic('users')}${b.passengers} pax</span>${b.fare ? `<span>${ic('rupee')}${money(b.fare).replace(cur, '')}</span>` : ''}<span>${esc(b.ref)}</span>${b.source === 'manual' ? '<span class="tag">Manual bill</span>' : ''}</div>
+  <div class="meta"><span>${ic('calendar')}${when(b.pickup_at)}</span><span>${ic('users')}${b.passengers} pax</span>${b.fare ? `<span>${ic('rupee')}${money(b.fare).replace(cur, '')}</span>` : ''}<span>${esc(b.ref)}</span>${b.bill_number ? `<span>${esc(b.bill_number)}</span>` : ''}${b.source === 'manual' ? '<span class="tag">Manual bill</span>' : ''}</div>
   <div class="who"><span>${ic('user')}${esc(b.name)}</span><a href="${tel}">${ic('phone')}${esc(b.phone)}</a>${b.email ? `<span>${ic('mail')}${esc(b.email)}</span>` : ''}</div>
   ${b.notes ? `<div class="muted">${ic('note')} ${esc(b.notes)}</div>` : ''}
   ${conflictOf(b)}
@@ -104,13 +104,48 @@ function renderSchedule() {
   $('#tab-schedule').innerHTML = html + (up.length ? '' : '<p class="muted">Nothing scheduled.</p>');
 }
 
+// "Rides & bills": website bookings and manual bills, filterable by type, status, date and text
+const hist = { source: '', status: '', preset: 'all', from: '', to: '', q: '' };
+let histRows = [], histSeq = 0;
 function renderHistory() {
   const el = $('#tab-history');
-  const f = el.dataset.filter || '';
-  const list = bookings.filter((b) => !f || b.status === f);
-  el.innerHTML = `<h2 class="sec">${ic('list')}All rides &amp; bills</h2><label class="history-filter">Filter<select id="hf"><option value="">All</option>${['pending', 'confirmed', 'completed', 'cancelled', 'rejected'].map((s) => `<option ${s === f ? 'selected' : ''}>${s}</option>`).join('')}</select></label>` +
-    (list.map((b) => rideCard(b)).join('') || '<p class="muted">No rides.</p>');
-  $('#hf').onchange = (e) => { el.dataset.filter = e.target.value; renderHistory(); };
+  if (!$('#hList')) {
+    el.innerHTML = `<h2 class="sec">${ic('list')}Rides &amp; bills</h2>
+    <div class="card rangebar" id="hControls">
+      <div class="chips" id="hPresets"></div>
+      <div class="custom"><label>From<input type="date" id="hFrom"></label><label>To<input type="date" id="hTo"></label><button class="btn sm navy" id="hApply">${ic('check')}Apply</button></div>
+      <div class="row">
+        <label>Type<select id="hSource"><option value="">All rides</option><option value="web">Website bookings</option><option value="manual">Manual bills</option></select></label>
+        <label>Status<select id="hStatus"><option value="">All</option>${['pending', 'confirmed', 'completed', 'cancelled', 'rejected'].map((s) => `<option>${s}</option>`).join('')}</select></label>
+      </div>
+      <label style="margin:0">Search<span class="field">${ic('search')}<input id="hQ" type="search" placeholder="Name, phone, booking ref or place" autocomplete="off"></span></label>
+      <div class="muted" id="hSummary" style="font-size:13px"></div>
+    </div><div id="hList"></div>`;
+    $('#hSource').onchange = (e) => { hist.source = e.target.value; loadHistory(); };
+    $('#hStatus').onchange = (e) => { hist.status = e.target.value; loadHistory(); };
+    let t; $('#hQ').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { hist.q = e.target.value.trim(); loadHistory(); }, 300); };
+    $('#hApply').onclick = () => {
+      const from = $('#hFrom').value, to = $('#hTo').value;
+      if (!from || !to) return toast('Pick both a start and an end date.');
+      Object.assign(hist, { preset: 'custom', from, to }); loadHistory();
+    };
+    $('#hPresets').onclick = (e) => { const b = e.target.closest('[data-hpreset]'); if (b) { Object.assign(hist, { preset: b.dataset.hpreset, from: '', to: '' }); $('#hFrom').value = $('#hTo').value = ''; loadHistory(); } };
+  }
+  $('#hPresets').innerHTML = [...PRESETS].map(([k, l]) => `<button class="chip ${hist.preset === k ? 'on' : ''}" data-hpreset="${k}">${l === 'All time' ? 'All dates' : l}</button>`).join('');
+  loadHistory();
+}
+async function loadHistory() {
+  const seq = ++histSeq, p = new URLSearchParams({ limit: 1 });
+  for (const k of ['source', 'status', 'q']) if (hist[k]) p.set(k, hist[k]);
+  if (hist.preset !== 'all') { p.set('preset', hist.preset); if (hist.preset === 'custom') { p.set('from', hist.from); p.set('to', hist.to); } }
+  let rows;
+  try { rows = await api('/api/driver/bookings?' + p); } catch (e) { return toast(esc(e.message)); }
+  if (seq !== histSeq) return;                                           // a newer filter change already replaced this
+  histRows = rows;
+  document.querySelectorAll('#hPresets .chip').forEach((c) => c.classList.toggle('on', c.dataset.hpreset === hist.preset));
+  const billed = rows.filter((b) => b.status === 'completed'), total = billed.reduce((s, b) => s + (b.fare || 0), 0);
+  $('#hSummary').innerHTML = `<b>${rows.length}</b> ride${rows.length === 1 ? '' : 's'}${rows.length >= 1000 ? ' (first 1000 shown)' : ''} &middot; <b>${billed.length}</b> completed &middot; billed <b>${money(total)}</b>`;
+  $('#hList').innerHTML = rows.map((b) => rideCard(b)).join('') || '<p class="muted">No rides match these filters.</p>';
 }
 
 // ---------- analytics ----------
@@ -161,7 +196,7 @@ document.addEventListener('click', async (e) => {
     if (el.dataset.act) {
       if (['cancelled', 'rejected'].includes(el.dataset.act) && !confirm('Are you sure?')) return;
       await api('/api/driver/bookings/' + el.dataset.id, 'PATCH', { status: el.dataset.act }); await refresh();
-    } else if (el.dataset.bill) openBill(bookings.find((b) => b.id == el.dataset.bill));
+    } else if (el.dataset.bill) openBill([...histRows, ...bookings].find((b) => b.id == el.dataset.bill));
     else if (el.dataset.resend) { const w = window.open('', '_blank'); try { const r = await api(`/api/driver/bills/${el.dataset.resend}/send`, 'POST', {}); w.location = r.whatsapp; } catch (e2) { w.close(); throw e2; } }
   } catch (err) { toast(esc(err.message)); }
 });

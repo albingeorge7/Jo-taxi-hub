@@ -65,3 +65,4 @@ dialog .row{display:grid;gap:12px;grid-template-columns:1fr 1fr}@media(max-width
 #billForm[data-mode=km] #modeKm{display:block}
 .leg-route{font-weight:500;color:var(--muted);margin-left:2px}
 .leg .l-route{margin-top:2px}
+#hControls .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}#hControls label{margin-bottom:0}

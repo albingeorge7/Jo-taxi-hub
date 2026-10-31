@@ -157,4 +157,17 @@ const again = (await loginAs('7.7.7.7', 'test-pass')).headers.get('set-cookie').
 assert.equal((await j('/api/driver/me', 'GET', null, again)).data.loggedIn, true);
 await j('/api/driver/logout', 'POST', {}, again);
 assert.equal((await j('/api/driver/me', 'GET', null, again)).data.loggedIn, false, 'logout ends the session');
+// Rides & bills filters
+const ck2 = (await loginAs('9.9.9.9', 'test-pass')).headers.get('set-cookie').split(';')[0];
+const hb = async (q) => (await j('/api/driver/bookings?' + q, 'GET', null, ck2)).data;
+const everything = await hb('limit=1');
+assert.ok(everything.some((x) => x.source === 'manual') && everything.some((x) => x.source === 'web'), 'manual bills and website bookings are both listed');
+assert.ok((await hb('source=manual')).every((x) => x.source === 'manual') && (await hb('source=web')).every((x) => x.source === 'web'), 'type filter');
+assert.equal((await hb('preset=custom&from=2026-09-01&to=2026-09-30')).length, 1, 'date filter finds the September ride');
+assert.equal((await hb('preset=custom&from=2026-09-16&to=2026-09-30')).length, 0, 'and excludes it outside the range');
+assert.equal((await hb('preset=custom&from=2026-09-15&to=2026-09-15')).length, 1, 'single day range is inclusive');
+assert.ok((await hb('q=Old%20Trip')).length === 1 && (await hb('q=9847011155')).length === 1, 'search by name and phone');
+assert.equal((await hb('q=%25')).length, 0, 'wildcards in search are escaped');
+assert.ok((await hb('preset=today')).length >= 3 && (await hb('preset=today')).every((x) => x.bill_number !== undefined), 'today preset; bill number included');
+assert.equal((await j('/api/driver/bookings?preset=custom&from=bad&to=2026-01-01', 'GET', null, ck2)).status, 400);
 console.log('All tests passed'); process.exit(0);

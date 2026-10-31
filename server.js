@@ -192,9 +192,10 @@ function waNumber(phone) {
   if (d.length === 10) d = config.countryCode + d;
   return d;
 }
-// Midnight-safe "noon on this calendar day" in the business timezone (used for bills dated by their first leg).
-function noonIn(dateStr, tz) {
-  const [y, m, d] = dateStr.split('-').map(Number), guess = Date.UTC(y, m - 1, d, 12);
+// The instant at a given hour on a calendar day in the business timezone (bills dated by their first leg, day filters).
+const noonIn = (dateStr, tz) => zonedTime(dateStr, 12, tz);
+function zonedTime(dateStr, hour, tz) {
+  const [y, m, d] = dateStr.split('-').map(Number), guess = Date.UTC(y, m - 1, d, hour);
   const g = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(new Date(guess)).map((p) => [p.type, p.value]));
   return new Date(guess - (Date.UTC(+g.year, +g.month - 1, +g.day, +g.hour, +g.minute) - guess));
 }
@@ -318,11 +319,20 @@ async function api(req, res, url) {
   }
 
   if (m === 'GET' && pathname === '/api/driver/bookings') {
-    const status = url.searchParams.get('status');
-    const rows = status && STATUSES.includes(status)
-      ? db.prepare('SELECT b.*, (SELECT token FROM bills WHERE booking_id=b.id) AS bill_token FROM bookings b WHERE status=? ORDER BY pickup_at DESC LIMIT 500').all(status)
-      : db.prepare('SELECT b.*, (SELECT token FROM bills WHERE booking_id=b.id) AS bill_token FROM bookings b ORDER BY pickup_at DESC LIMIT 500').all();
-    return send(res, 200, rows);
+    // optional filters for the "Rides & bills" tab: status, source (web|manual), date range (by pickup day) and a text search
+    const q = url.searchParams, where = [], args = [];
+    if (STATUSES.includes(q.get('status'))) { where.push('b.status=?'); args.push(q.get('status')); }
+    if (['web', 'manual'].includes(q.get('source'))) { where.push('b.source=?'); args.push(q.get('source')); }
+    const preset = q.get('preset');
+    if (preset && preset !== 'all') {
+      const r = resolveRange({ preset, from: q.get('from'), to: q.get('to') }, todayKey(), '');
+      where.push('b.pickup_at >= ? AND b.pickup_at < ?');
+      args.push(zonedTime(r.from, 0, config.timezone).toISOString(), zonedTime(ymd(dayMs(r.to) + DAY), 0, config.timezone).toISOString());
+    }
+    const text = clean(q.get('q'), 60).replace(/[\\%_]/g, '\\$&');
+    if (text) { where.push("(b.name LIKE ? ESCAPE '\\' OR b.phone LIKE ? ESCAPE '\\' OR b.ref LIKE ? ESCAPE '\\' OR b.pickup LIKE ? ESCAPE '\\' OR b.dropoff LIKE ? ESCAPE '\\')"); args.push(...Array(5).fill(`%${text}%`)); }
+    const limit = q.get('limit') ? 1000 : 500;
+    return send(res, 200, db.prepare(`SELECT b.*, (SELECT token FROM bills WHERE booking_id=b.id) AS bill_token, (SELECT number FROM bills WHERE booking_id=b.id) AS bill_number FROM bookings b ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY b.pickup_at DESC LIMIT ${limit}`).all(...args));
   }
 
   const upd = pathname.match(/^\/api\/driver\/bookings\/(\d+)$/);
