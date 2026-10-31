@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111827">
+<title>Cab Rental – Book a Ride</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="site"><div class="wrap"><b id="brand">🚖 Cab</b><nav><a href="#about">Details</a><a href="#book">Book</a><a href="#track">Track</a></nav></div></header>
+
+<div class="hero"><div class="wrap">
+  <h1 id="h-name">Cab Rental</h1><p id="h-tag"></p>
+  <a class="btn" href="#book">Book a ride</a>
+  <a class="btn sec" id="h-call" href="#">📞 Call driver</a>
+</div></div>
+
+<section id="about"><div class="wrap">
+  <h2>Driver &amp; service details</h2>
+  <div class="grid" id="details"></div>
+  <h2 style="margin-top:24px">Services</h2>
+  <div class="chips" id="areas"></div>
+  <p style="margin-top:20px"><strong>Rates:</strong> <span id="rates"></span></p>
+</div></section>
+
+<section id="book" style="background:#fff"><div class="wrap" style="max-width:640px">
+  <h2>Book a ride</h2>
+  <form id="bookForm" novalidate>
+    <div class="row">
+      <label>Your name<input name="name" required autocomplete="name"></label>
+      <label>Phone<input name="phone" type="tel" required autocomplete="tel" placeholder="+91 …"></label>
+    </div>
+    <label>Email (to receive your bill)<input name="email" type="email" autocomplete="email"></label>
+    <label>Pickup location<input name="pickup" required></label>
+    <label>Drop location<input name="dropoff" required></label>
+    <div class="row">
+      <label>Pickup date &amp; time<input name="when" type="datetime-local" required></label>
+      <label>Passengers<input name="passengers" type="number" min="1" max="20" value="1"></label>
+    </div>
+    <label>Notes (luggage, flight no., etc.)<textarea name="notes" rows="2"></textarea></label>
+    <button class="btn block" id="bookBtn">Request booking</button>
+  </form>
+  <div id="bookMsg"></div>
+</div></section>
+
+<section id="track"><div class="wrap" style="max-width:640px">
+  <h2>Check booking status</h2>
+  <form id="trackForm" class="row">
+    <label>Booking reference<input name="ref" required placeholder="CAB…" autocapitalize="characters"></label>
+    <label>Phone used for booking<input name="phone" type="tel" required></label>
+    <button class="btn" style="grid-column:1/-1">Check status</button>
+  </form>
+  <div id="trackMsg"></div>
+</div></section>
+
+<footer id="foot"></footer>
+<a class="fab hidden" id="wa" href="#" target="_blank" rel="noopener">💬 WhatsApp</a>
+<script src="/app.js"></script>
+</body>
+</html>

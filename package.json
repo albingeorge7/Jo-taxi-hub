@@ -1,0 +1,10 @@
+{
+  "name": "cab-rental",
+  "version": "1.0.0",
+  "description": "Cab rental website with booking, and a driver dashboard (schedule, live alerts, analytics, billing)",
+  "type": "module",
+  "main": "server.js",
+  "scripts": { "start": "node server.js", "test": "node test.mjs" },
+  "engines": { "node": ">=22.5" },
+  "optionalDependencies": { "nodemailer": "^6.9.0" }
+}
