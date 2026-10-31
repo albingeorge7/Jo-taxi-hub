@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import config from './config.js';
-import { renderBill, billMessage } from './bill.js';
+import { renderBill, renderPayPage, billMessage } from './bill.js';
 import { buildBillPdf } from './pdf.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -239,6 +239,14 @@ async function api(req, res, url) {
     res.writeHead(204); return res.end();
   }
 
+  // "pay now" link used in the WhatsApp message: hands over to the customer's UPI app
+  const payPage = pathname.match(/^\/pay\/([a-f0-9]{32})$/);
+  if (m === 'GET' && payPage) {
+    const bill = loadBill(db.prepare('SELECT * FROM bills WHERE token=?').get(payPage[1]));
+    if (!bill) throw new HttpError(404, 'Bill not found');
+    return send(res, 200, renderPayPage(bill, null), { 'Cache-Control': 'no-store' });
+  }
+
   // public bill page (HTML) and PDF
 
   const billPage = pathname.match(/^\/bill\/([a-f0-9]{32})(\.pdf)?$/);
@@ -467,7 +475,7 @@ function serveStatic(req, res, pathname) {
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://x');
-    if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/bill/')) await api(req, res, url);
+    if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/bill/') || url.pathname.startsWith('/pay/')) await api(req, res, url);
     else if (req.method === 'GET' || req.method === 'HEAD') serveStatic(req, res, url.pathname);
     else throw new HttpError(405, 'Method not allowed');
   } catch (e) {

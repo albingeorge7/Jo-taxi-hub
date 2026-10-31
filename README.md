@@ -17,7 +17,7 @@ DRIVER_ADDRESS="12 Main Rd, Kochi" npm start
 - **Bills** – "Complete & bill" builds an itemised bill (base fare, km, tolls…, tax %). It's saved at a private link `/bill/<token>` (print / save as PDF). A "Send bill on WhatsApp" button opens WhatsApp with the customer's number and the bill link ready to send. The red floating **New bill** button creates a bill for rides not booked on the site. Fares can be *per km + extras (toll, parking…)* or a *fixed amount*.
 
 ## UPI payment
-Bills that are not marked Cash or Card show a **Pay with UPI** button (opens the customer's UPI app with the amount filled in), the UPI ID with a Copy button, and the UPI ID is added to the PDF and the WhatsApp message. Set `UPI_ID` and `UPI_NAME` (default `jojojosemangalan-1@okaxis`).
+The WhatsApp message for any bill not marked Cash or Card includes a tappable link (`/pay/<token>`). It opens a small page that hands over to the customer's UPI app (GPay, PhonePe, Paytm…) with the amount filled in. The UPI ID is not shown on the bill or PDF. Set `UPI_ID` and `UPI_NAME` (default `jojojosemangalan-1@okaxis`).
 
 ## Bill PDF on WhatsApp
 Every bill is also a real PDF (`/bill/<token>.pdf`, generated on the server, no dependencies). **Send PDF on WhatsApp** opens the phone's share sheet with the PDF attached; choose WhatsApp, then the customer's chat. (WhatsApp does not allow an app to attach a file to a chosen contact automatically.) On desktop the PDF downloads and the WhatsApp chat opens so it can be attached. Standard PDF fonts only cover Latin letters, so other scripts in names print as `?` in the PDF (the web bill shows them correctly).

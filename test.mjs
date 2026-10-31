@@ -27,6 +27,7 @@ const sse = await fetch(base + '/api/driver/events', { headers: { Cookie: cookie
 const reader = sse.body.getReader(); let seen = '';
 const gotAlert = (async () => { for (;;) { const { value } = await reader.read(); seen += Buffer.from(value); if (seen.includes('event: booking')) return; } })();
 
+const pdfBufText = async (link) => Buffer.from(await (await fetch(link.replace(/^https?:\/\/[^/]+/, base) + '.pdf')).arrayBuffer()).toString('latin1');
 const bk = await j('/api/bookings', 'POST', { name: '<b>Asha</b>', phone: '+91 98765 43210', email: 'a@x.com', pickup: 'Airport', dropoff: 'Hotel', pickup_at: when, passengers: 2, pickup_lat: '10.1520', pickup_lng: '76.4019', drop_lat: 'abc', drop_lng: '76.3' });
 assert.equal(bk.status, 201);
 await gotAlert; ac.abort();
@@ -49,11 +50,16 @@ assert.equal((await j('/api/driver/bills', 'POST', { booking_id: id, items: [{ d
 const page = await fetch(bill.data.link.replace(/^https?:\/\/[^/]+/, base));
 const html = await page.text();
 assert.ok(html.includes('199.50') && html.includes('&lt;b&gt;Asha'), 'bill renders & escapes');
-assert.ok(html.includes('upi://pay?pa=jojojosemangalan-1@okaxis&amp;pn=') && html.includes('am=199.50'), 'UPI pay link on the bill');
-assert.ok(decodeURIComponent(bill.data.whatsapp).includes('Pay by UPI: jojojosemangalan-1@okaxis'), 'UPI id in WhatsApp message');
+assert.ok(!html.includes('upi://') && !html.includes('okaxis'), 'no UPI id or pay link on the bill itself');
+assert.ok(!(await pdfBufText(bill.data.link)).includes('okaxis'), 'no UPI id in the PDF');
+const msg = decodeURIComponent(bill.data.whatsapp);
+const payUrl = msg.match(/https?:\/\/\S+\/pay\/[a-f0-9]{32}/)?.[0];
+assert.ok(payUrl && !msg.includes('okaxis'), 'WhatsApp message has a tappable https pay link, not the raw UPI id');
+const payHtml = await (await fetch(payUrl.replace(/^https?:\/\/[^/]+/, base))).text();
+assert.ok(payHtml.includes('upi://pay?pa=jojojosemangalan-1@okaxis&amp;pn=') && payHtml.includes('am=199.50'), 'pay page opens the UPI app with the amount');
 const paid = await j('/api/driver/bills', 'POST', { customer: { name: 'Cash Cust', pickup: 'A', dropoff: 'B', phone: '9847011133' }, items: [{ description: 'Fare', qty: 1, rate: 100 }], payment_method: 'Cash' }, cookie);
-assert.ok(!decodeURIComponent(paid.data.whatsapp).includes('Pay by UPI'), 'no UPI request on cash bills');
-assert.ok(!(await (await fetch(paid.data.link.replace(/^https?:\/\/[^/]+/, base))).text()).includes('upi://pay'), 'no pay button on cash bills');
+assert.ok(!decodeURIComponent(paid.data.whatsapp).includes('/pay/'), 'no pay link on cash bills');
+assert.ok(!(await (await fetch(paid.data.link.replace(/^https?:\/\/[^/]+/, base).replace('/bill/', '/pay/'))).text()).includes('upi://pay'), 'pay page of a cash bill has no UPI link');
 
 // manual bill (ride not booked on the site), fixed amount, number without country code
 const man = await j('/api/driver/bills', 'POST', { customer: { name: 'Walk In', phone: '98470 11122', pickup: 'Aluva', dropoff: 'Munnar' }, items: [{ description: 'Cab fare', qty: 1, rate: 3500 }], whatsapp_to: '98470 11122' }, cookie);
