@@ -68,9 +68,18 @@ async function readJson(req) {
   try { return JSON.parse(Buffer.concat(chunks).toString() || '{}'); } catch { throw new HttpError(400, 'Invalid JSON'); }
 }
 
+// Behind the Cloudflare tunnel every request arrives from localhost, so use the visitor IP
+// Cloudflare passes along (only trusted when the request really came from this machine).
+function clientIp(req) {
+  const a = req.socket.remoteAddress || '';
+  if (a === '127.0.0.1' || a === '::1' || a === '::ffff:127.0.0.1') {
+    return String(req.headers['cf-connecting-ip'] || (req.headers['x-forwarded-for'] || '').split(',')[0] || a).trim();
+  }
+  return a;
+}
 const hits = new Map();
 function rateLimit(req, key, max, windowMs) {
-  const k = key + ':' + req.socket.remoteAddress; const now = Date.now();
+  const k = key + ':' + clientIp(req); const now = Date.now();
   const arr = (hits.get(k) || []).filter((t) => now - t < windowMs);
   if (arr.length >= max) throw new HttpError(429, 'Too many requests, please try again later');
   arr.push(now); hits.set(k, arr);
@@ -80,6 +89,7 @@ setInterval(() => { const now = Date.now(); for (const [k, v] of hits) if (!v.so
 // sessions (in memory; driver just logs in again after a restart)
 const sessions = new Map();
 const SESSION_MS = 12 * 3600e3;
+setInterval(() => { for (const [k, v] of sessions) if (v.expires < Date.now()) sessions.delete(k); }, 3600e3).unref();
 function parseCookies(req) {
   return Object.fromEntries((req.headers.cookie || '').split(';').map((s) => s.trim().split('=')).filter((p) => p[0]).map(([k, ...v]) => [k, v.join('=')]));
 }
@@ -186,9 +196,12 @@ async function api(req, res, url) {
 
   // ----- driver auth -----
   if (m === 'POST' && pathname === '/api/driver/login') {
-    rateLimit(req, 'login', 10, 15 * 60e3);
+    if ((hits.get('login:' + clientIp(req)) || []).filter((t) => Date.now() - t < 15 * 60e3).length >= 10) throw new HttpError(429, 'Too many attempts, try again in 15 minutes');
     const { username, password } = await readJson(req);
-    if (!(safeEq(username, config.driverUser) & safeEq(password, config.driverPassword))) throw new HttpError(401, 'Wrong username or password');
+    if (!(safeEq(username, config.driverUser) & safeEq(password, config.driverPassword))) {
+      rateLimit(req, 'login', 10, 15 * 60e3); // only wrong attempts count towards the lockout
+      throw new HttpError(401, 'Wrong username or password');
+    }
     const sid = crypto.randomBytes(24).toString('hex');
     sessions.set(sid, { expires: Date.now() + SESSION_MS });
     return send(res, 200, { ok: true }, { 'Set-Cookie': `sid=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS / 1000}${config.baseUrl.startsWith('https') ? '; Secure' : ''}` });
@@ -239,7 +252,7 @@ async function api(req, res, url) {
     const items = b.items.map((it) => {
       const qty = Number(it.qty), rate = Number(it.rate);
       const description = clean(it.description, 120);
-      if (!description || !isFinite(qty) || !isFinite(rate) || qty <= 0) throw new HttpError(400, 'Each item needs a description, quantity and amount');
+      if (!description || !isFinite(qty) || !isFinite(rate) || qty <= 0 || qty > 100000 || rate > 1e7) throw new HttpError(400, 'Each item needs a description, a sensible quantity and amount');
       return { description, qty, rate, amount: round2(qty * rate) };
     });
     const taxPercent = Math.max(0, Math.min(50, Number(b.tax_percent) || 0));
@@ -336,7 +349,9 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': '
 function serveStatic(req, res, pathname) {
   if (pathname === '/') pathname = '/index.html';
   if (pathname === '/driver') pathname = '/driver.html';
-  const file = path.normalize(path.join(PUBLIC, decodeURIComponent(pathname)));
+  let decoded;
+  try { decoded = decodeURIComponent(pathname); } catch { throw new HttpError(404, 'Not found'); }
+  const file = path.normalize(path.join(PUBLIC, decoded));
   if (!file.startsWith(PUBLIC + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) throw new HttpError(404, 'Not found');
   const ext = path.extname(file);
   const headers = { 'Content-Type': MIME[ext] || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff' };

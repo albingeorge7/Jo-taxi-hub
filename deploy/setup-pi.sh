@@ -11,10 +11,14 @@ fi
 
 ENV_FILE=/etc/cab-rental.env
 if [ ! -f "$ENV_FILE" ]; then
-  read -rsp "Choose the driver dashboard password: " PW; echo
+  while :; do
+    read -rsp "Choose the driver dashboard password (min 8 characters, no quote marks): " PW; echo
+    [ ${#PW} -ge 8 ] && [[ "$PW" != *"'"* ]] && [ "$PW" != "driver123" ] && break
+    echo "Too short, contains a quote mark, or is the default - try again."
+  done
   sudo tee "$ENV_FILE" >/dev/null <<EOT
-PORT=3000
-DRIVER_PASSWORD=$PW
+PORT=3100
+DRIVER_PASSWORD='$PW'
 DATA_DIR=$APP_DIR/data
 # BASE_URL=https://your-address   (set once you know the public address; used in bill links)
 # TELEGRAM_BOT_TOKEN=
@@ -44,4 +48,4 @@ EOT
 sudo systemctl daemon-reload
 sudo systemctl enable --now cab-rental
 sleep 1
-systemctl is-active cab-rental && echo "Running on http://$(hostname -I | awk '{print $1}'):3000"
+systemctl is-active cab-rental && echo "Running on http://$(hostname -I | awk '{print $1}'):$(sudo grep -h ^PORT= $ENV_FILE | cut -d= -f2)"

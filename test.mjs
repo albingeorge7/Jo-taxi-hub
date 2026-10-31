@@ -6,8 +6,8 @@ process.env.DRIVER_PASSWORD = 'test-pass';
 const { server } = await import('./server.js');
 await new Promise((r) => server.listen(0, r));
 const base = `http://localhost:${server.address().port}`;
-const j = async (url, method = 'GET', body, cookie) => {
-  const r = await fetch(base + url, { method, headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(cookie ? { Cookie: cookie } : {}) }, body: body && JSON.stringify(body) });
+const j = async (url, method = 'GET', body, cookie, extra = {}) => {
+  const r = await fetch(base + url, { method, headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(cookie ? { Cookie: cookie } : {}), ...extra }, body: body && JSON.stringify(body) });
   return { status: r.status, data: await r.json().catch(() => null), headers: r.headers };
 };
 const when = new Date(Date.now() + 3600e3).toISOString();
@@ -63,4 +63,18 @@ assert.equal(st.totals.completed, 2); assert.equal(st.totals.revenueAll, 3699.5)
 assert.equal((await fetch(base + '/../etc/passwd')).status === 200, false);
 assert.equal((await fetch(base + '/%2e%2e/server.js')).status, 404);
 for (const p of ['/', '/driver', '/app.js', '/driver.js']) assert.equal((await fetch(base + p)).status, 200, p);
+// rate limits are per visitor (behind the tunnel everyone is localhost; CF-Connecting-IP identifies them)
+const bookAs = (ip) => j('/api/bookings', 'POST', { name: 'T', phone: '9847011122', pickup: 'A', dropoff: 'B', pickup_at: when }, undefined, { 'CF-Connecting-IP': ip });
+for (let i = 0; i < 8; i++) assert.equal((await bookAs('1.1.1.1')).status, 201);
+assert.equal((await bookAs('1.1.1.1')).status, 429, 'same visitor limited');
+assert.equal((await bookAs('2.2.2.2')).status, 201, 'other visitors unaffected');
+const loginAs = (ip, password) => j('/api/driver/login', 'POST', { username: 'driver', password }, undefined, { 'CF-Connecting-IP': ip });
+for (let i = 0; i < 10; i++) assert.equal((await loginAs('3.3.3.3', 'nope')).status, 401);
+assert.equal((await loginAs('3.3.3.3', 'test-pass')).status, 429, 'attacker locked out even with right password');
+assert.equal((await loginAs('4.4.4.4', 'test-pass')).status, 200, 'driver on another IP can still log in');
+assert.equal((await fetch(base + '/%E0%A4%A')).status, 404, 'bad URI is a 404 not a 500');
+assert.equal((await j('/api/driver/bills', 'POST', { booking_id: id + 999, items: [{ description: 'x', qty: 1, rate: 1 }] }, cookie)).status, 404);
+assert.equal((await j('/api/driver/bills', 'POST', { customer: { name: 'x', pickup: 'A', dropoff: 'B', phone: '9847011122' }, items: [{ description: 'x', qty: 1, rate: 1e12 }] }, cookie)).status, 400, 'absurd amounts rejected');
+assert.equal((await j(`/api/driver/bookings/${id}`, 'PATCH', { status: 'bogus' }, cookie)).status, 400);
+assert.equal((await j(`/api/driver/bookings/${id}`, 'PATCH', { fare: -5 }, cookie)).status, 400);
 console.log('All tests passed'); process.exit(0);
