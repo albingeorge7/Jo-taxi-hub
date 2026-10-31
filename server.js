@@ -180,6 +180,12 @@ function waNumber(phone) {
   if (d.length === 10) d = config.countryCode + d;
   return d;
 }
+// Midnight-safe "noon on this calendar day" in the business timezone (used for bills dated by their first leg).
+function noonIn(dateStr, tz) {
+  const [y, m, d] = dateStr.split('-').map(Number), guess = Date.UTC(y, m - 1, d, 12);
+  const g = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(new Date(guess)).map((p) => [p.type, p.value]));
+  return new Date(guess - (Date.UTC(+g.year, +g.month - 1, +g.day, +g.hour, +g.minute) - guess));
+}
 const waLink = (phone, bill, booking, link) => `https://wa.me/${waNumber(phone)}?text=${encodeURIComponent(billMessage(bill, booking, link))}`;
 
 const loadBill = (row) => row && { ...row, items: JSON.parse(row.items) };
@@ -322,7 +328,7 @@ async function api(req, res, url) {
     if (!Array.isArray(b.items) || !b.items.length || b.items.length > 20) throw new HttpError(400, 'Add at least one bill item');
     const items = b.items.map((it) => {
       const qty = Number(it.qty), rate = Number(it.rate);
-      const description = clean(it.description, 120);
+      const description = clean(it.description, 200);
       if (!description || !isFinite(qty) || !isFinite(rate) || qty <= 0 || qty > 100000 || rate > 1e7) throw new HttpError(400, 'Each item needs a description, a sensible quantity and amount');
       return { description, qty, rate, amount: round2(qty * rate) };
     });
@@ -344,8 +350,14 @@ async function api(req, res, url) {
       if (!cname) throw new HttpError(400, "Enter the customer's name");
       if (!pickup || !dropoff) throw new HttpError(400, 'Enter the pickup and drop points');
       if (!/^\+?[0-9 ()-]{7,20}$/.test(phone)) throw new HttpError(400, "Enter the customer's WhatsApp number");
+      let rideAt = new Date();
+      if (c.ride_date) { // date of the first leg, so the ride lands on the right day in the schedule and analytics
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(c.ride_date) || isNaN(noonIn(c.ride_date, config.timezone))) throw new HttpError(400, 'Enter a valid trip date');
+        if (c.ride_date > todayKey()) throw new HttpError(400, 'The trip date cannot be in the future');
+        rideAt = noonIn(c.ride_date, config.timezone);
+      }
       const info = db.prepare(`INSERT INTO bookings (ref,name,phone,pickup,dropoff,pickup_at,passengers,status,source) VALUES (?,?,?,?,?,?,1,'completed','manual')`)
-        .run(newRef(), cname, phone, pickup, dropoff, new Date().toISOString());
+        .run(newRef(), cname, phone, pickup, dropoff, rideAt.toISOString());
       booking = db.prepare('SELECT * FROM bookings WHERE id=?').get(info.lastInsertRowid);
     }
     const token = crypto.randomBytes(16).toString('hex');

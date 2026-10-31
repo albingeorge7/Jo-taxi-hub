@@ -132,4 +132,16 @@ assert.ok(nb.data.whatsapp.startsWith('https://wa.me/919847099999?text='), 'new 
 const rs = await j(`/api/driver/bills/${id2}/send`, 'POST', {}, cookie);
 assert.ok(rs.data.whatsapp.startsWith('https://wa.me/919847099999?text='), 're-send uses the edited number, not the booking number');
 assert.ok(!nb.data.whatsapp.includes('919847011144'));
+// leg dates: a manual bill takes the first leg's date as the ride date
+const dated = await j('/api/driver/bills', 'POST', { customer: { name: 'Old Trip', pickup: 'A', dropoff: 'A', phone: '9847011155', ride_date: '2026-09-15' }, items: [{ description: 'Leg 1 · 15 Sep 2026: A → B', qty: 1, rate: 700 }, { description: 'Leg 2 · 17 Sep 2026: B → A', qty: 1, rate: 700 }] }, cookie);
+assert.equal(dated.status, 201);
+const dbk = (await j('/api/driver/bookings', 'GET', null, cookie)).data.find((x) => x.phone === '9847011155');
+assert.equal(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date(dbk.pickup_at)), '2026-09-15', 'ride dated by its first leg');
+const sep = (await sj('preset=custom&from=2026-09-01&to=2026-09-30')).data.range.totals; assert.equal(sep.revenue, 1400, 'revenue lands in September');
+assert.equal((await j('/api/driver/bills', 'POST', { customer: { name: 'x', pickup: 'A', dropoff: 'B', phone: '9847011166', ride_date: '2999-01-01' }, items: [{ description: 'f', qty: 1, rate: 5 }] }, cookie)).status, 400, 'future trip date rejected');
+assert.equal((await j('/api/driver/bills', 'POST', { customer: { name: 'x', pickup: 'A', dropoff: 'B', phone: '9847011166', ride_date: '15/09/2026' }, items: [{ description: 'f', qty: 1, rate: 5 }] }, cookie)).status, 400, 'bad date rejected');
+const longDesc = 'Leg 2 · 17 Sep 2026: Cochin International Airport Nedumbassery → Fort Kochi Beach Road (120 km @ ₹14/km)';
+const ld = await j('/api/driver/bills', 'POST', { customer: { name: 'Long', pickup: 'A', dropoff: 'B', phone: '9847011177' }, items: [{ description: longDesc, qty: 1, rate: 10 }] }, cookie);
+assert.ok(ld.data.bill.items[0].description.length > 100 && ld.data.bill.items[0].description.endsWith('₹14/km)'), 'long leg descriptions are not cut off');
+assert.equal((await fetch(ld.data.link.replace(/^https?:\/\/[^/]+/, base) + '.pdf')).status, 200, 'PDF builds with a long description');
 console.log('All tests passed'); process.exit(0);

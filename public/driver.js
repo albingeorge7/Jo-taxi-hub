@@ -177,9 +177,10 @@ const defaultRoute = () => {
   const f = $('#billForm'); return f.cpick.value && f.cdrop.value ? `${f.cpick.value.trim()} → ${f.cdrop.value.trim()}` : '';
 };
 const reverseRoute = (r) => { const p = r.split(ARROW); return p.length === 2 && p[0] && p[1] ? `${p[1].trim()} → ${p[0].trim()}` : ''; };
-function legRow(route = '', km = '', amt = '') {
+function legRow(route = '', km = '', amt = '', date = '') {
   return `<div class="leg"><div class="leg-h"><span>Leg <span class="ln"></span></span><button type="button" class="btn sm sec rmleg">${ic('x')}</button></div>
     <input class="l-route" placeholder="From → To" value="${esc(route)}">
+    <label style="margin-top:8px">Date <span class="muted">(optional &mdash; if different from the booking)</span><input class="l-date" type="date" max="${new Date().toLocaleDateString('en-CA')}" value="${date}"></label>
     <div class="row"><label class="km-only">Distance (km)<input class="l-km" type="number" min="0" step="any" inputmode="decimal" value="${km}"></label>
     <label class="fixed-only">Amount<input class="l-amt" type="number" min="0" step="any" inputmode="decimal" value="${amt}"></label></div></div>`;
 }
@@ -188,11 +189,11 @@ function renumberLegs() {
   legs.forEach((l, i) => { l.querySelector('.ln').textContent = i + 1; l.querySelector('.rmleg').classList.toggle('hidden', legs.length === 1); });
   const first = $('#legs .l-route'); if (first) first.placeholder = defaultRoute() || 'From → To';
 }
-function addLeg(route, km, amt) { $('#legs').insertAdjacentHTML('beforeend', legRow(route, km, amt)); renumberLegs(); calc(); }
+function addLeg(route, km, amt, date) { $('#legs').insertAdjacentHTML('beforeend', legRow(route, km, amt, date)); renumberLegs(); calc(); }
 function addReturnLeg() {
   const last = [...document.querySelectorAll('#legs .leg')].pop();
   const route = last ? (last.querySelector('.l-route').value.trim() || (document.querySelectorAll('#legs .leg').length === 1 ? defaultRoute() : '')) : defaultRoute();
-  addLeg(reverseRoute(route), last?.querySelector('.l-km').value || '', last?.querySelector('.l-amt').value || '');
+  addLeg(reverseRoute(route), last?.querySelector('.l-km').value || '', last?.querySelector('.l-amt').value || '', last?.querySelector('.l-date').value || '');
 }
 function setMode(m) {
   $('#billForm').dataset.mode = m;
@@ -213,21 +214,23 @@ function openBill(b) { // b = booking, or null for a ride that was not booked on
   $('#billMsg').innerHTML = ''; $('#billSave').classList.remove('hidden'); $('#billSave').disabled = false;
   setMode('km'); $('#billDlg').showModal();
 }
+const prettyLegDate = (s) => { const [y, m, dd] = s.split('-').map(Number); return new Date(y, m - 1, dd).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); };
 function activeLegs() {
   const km = billMode === 'km', n = (v) => Number(v) || 0;
-  return [...document.querySelectorAll('#legs .leg')].map((l) => ({ route: l.querySelector('.l-route').value.trim(), km: n(l.querySelector('.l-km').value), amt: n(l.querySelector('.l-amt').value) }))
+  return [...document.querySelectorAll('#legs .leg')].map((l) => ({ route: l.querySelector('.l-route').value.trim(), date: l.querySelector('.l-date').value, km: n(l.querySelector('.l-km').value), amt: n(l.querySelector('.l-amt').value) }))
     .filter((l) => (km ? l.km > 0 : l.amt > 0));
 }
 function readItems() {
   const f = $('#billForm'), n = (v) => Number(v) || 0, items = [], legs = activeLegs(), rate = n(f.rate.value), multi = legs.length > 1;
-  const label = (l, i) => (multi ? `Leg ${i + 1}: ${l.route || (i === 0 ? defaultRoute() : '') || 'trip'}` : '');
+  const tag = (l) => (l.date ? ` · ${prettyLegDate(l.date)}` : '');
+  const label = (l, i) => `Leg ${i + 1}${tag(l)}: ${l.route || (i === 0 ? defaultRoute() : '') || 'trip'}`;
   if (billMode === 'fixed') {
-    legs.forEach((l, i) => items.push({ description: multi ? label(l, i) : l.route || 'Cab fare', qty: 1, rate: l.amt }));
+    legs.forEach((l, i) => items.push({ description: multi ? label(l, i) : (l.route || 'Cab fare') + tag(l), qty: 1, rate: l.amt }));
     if (items.length && n(f.ftoll.value) > 0) items.push({ description: 'Toll', qty: 1, rate: n(f.ftoll.value) });
     return items;
   }
   if (n(f.base.value) > 0) items.push({ description: 'Base fare', qty: 1, rate: n(f.base.value) });
-  if (rate > 0) legs.forEach((l, i) => items.push({ description: `${multi ? label(l, i) + ' ' : 'Distance '}(${l.km} km @ ${cur}${rate}/km)`, qty: l.km, rate }));
+  if (rate > 0) legs.forEach((l, i) => items.push({ description: `${multi ? label(l, i) + ' ' : 'Distance' + tag(l) + ' '}(${l.km} km @ ${cur}${rate}/km)`, qty: l.km, rate }));
   document.querySelectorAll('#extraRows tr').forEach((tr) => {
     const dsc = tr.querySelector('.x-d').value.trim(), a = n(tr.querySelector('.x-a').value);
     if (dsc && a > 0) items.push({ description: dsc, qty: 1, rate: a });
@@ -261,7 +264,7 @@ $('#billForm').addEventListener('submit', async (e) => {
   try {
     const payload = { items, tax_percent: f.tax.value, whatsapp_to: f.wa.value };
     if (billBooking) payload.booking_id = billBooking.id;
-    else payload.customer = { name: f.cname.value, phone: f.wa.value, pickup: f.cpick.value, dropoff: f.cdrop.value };
+    else payload.customer = { name: f.cname.value, phone: f.wa.value, pickup: f.cpick.value, dropoff: f.cdrop.value, ride_date: activeLegs().map((l) => l.date).filter(Boolean).sort()[0] || '' };
     const r = await api('/api/driver/bills', 'POST', payload);
     $('#billSave').classList.add('hidden');
     $('#billMsg').innerHTML = `<div class="msg ok">${ic('check')}<div>Bill ${esc(r.bill.number)} created &mdash; ${money(r.bill.total)}</div></div>

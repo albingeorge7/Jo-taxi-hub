@@ -11,6 +11,13 @@ const WIDTHS = [278,278,355,556,556,889,667,191,333,333,389,584,278,333,278,278,
 const clean = (s) => String(s ?? '').replace(/₹/g, 'Rs.').replace(/→/g, '->').replace(/[–—]/g, '-').replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[•·]/g, '-').replace(/[^\x20-\x7e\xa1-\xff]/g, '?');
 const esc = (s) => clean(s).replace(/[\\()]/g, '\\$&');
 const textWidth = (s, size, bold) => [...clean(s)].reduce((a, c) => a + (WIDTHS[c.charCodeAt(0) - 32] ?? 556), 0) * size / 1000 * (bold ? 1.06 : 1);
+const wrap = (s, size, max, lines = 2) => { // greedy word wrap, last line truncated with "..."
+  const words = clean(s).split(' '), out = []; let cur = '';
+  for (const w of words) { const t = cur ? cur + ' ' + w : w; if (textWidth(t, size) <= max || !cur) cur = t; else { out.push(cur); cur = w; } }
+  out.push(cur);
+  if (out.length > lines) { const keep = out.slice(0, lines); keep[lines - 1] = fit(out.slice(lines - 1).join(' '), size, max); return keep; }
+  return out.map((l) => fit(l, size, max));
+};
 const fit = (s, size, max, bold) => { let t = clean(s); if (textWidth(t, size, bold) <= max) return t; while (t.length > 1 && textWidth(t + '...', size, bold) > max) t = t.slice(0, -1); return t + '...'; };
 const money = (n) => clean(`${config.currency}${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 const when = (iso, opts) => new Date(iso).toLocaleString('en-GB', { timeZone: config.timezone, ...opts });
@@ -57,9 +64,10 @@ export function buildBillPdf(bill, booking) {
   text('RATE', cRate, y + 2, { size: 8, bold: true, rgb: GREY, align: 'right' }); text('AMOUNT', cAmt - 8, y + 2, { size: 8, bold: true, rgb: GREY, align: 'right' });
   y -= 26;
   for (const it of bill.items) {
-    text(fit(it.description, 10, 290), 48, y, { size: 10 });
+    const dl = wrap(it.description, 10, 290);
+    dl.forEach((ln, i) => text(ln, 48, y - i * 12, { size: 10 }));
     text(String(+it.qty), cQty, y, { size: 10, align: 'right' }); text(money(it.rate), cRate, y, { size: 10, align: 'right' }); text(money(it.amount), cAmt - 8, y, { size: 10, align: 'right' });
-    line(40, y - 7, W - 40, y - 7); y -= 22;
+    y -= (dl.length - 1) * 12; line(40, y - 7, W - 40, y - 7); y -= 22;
   }
 
   // totals
