@@ -15,9 +15,9 @@ const when = new Date(Date.now() + 3600e3).toISOString();
 assert.equal((await j('/api/info')).status, 200);
 assert.equal((await j('/api/driver/bookings')).status, 401, 'driver API must need login');
 assert.equal((await j('/api/bookings', 'POST', { name: '', phone: '1' })).status, 400);
-assert.equal((await j('/api/driver/login', 'POST', { username: 'driver', password: 'bad' })).status, 401);
+assert.equal((await j('/api/driver/login', 'POST', { username: 'jojojose', password: 'bad' })).status, 401);
 
-const login = await j('/api/driver/login', 'POST', { username: 'driver', password: 'test-pass' });
+const login = await j('/api/driver/login', 'POST', { username: ' JoJoJose ', password: 'test-pass' });
 assert.equal(login.status, 200);
 const cookie = login.headers.get('set-cookie').split(';')[0];
 
@@ -68,7 +68,7 @@ const bookAs = (ip) => j('/api/bookings', 'POST', { name: 'T', phone: '984701112
 for (let i = 0; i < 8; i++) assert.equal((await bookAs('1.1.1.1')).status, 201);
 assert.equal((await bookAs('1.1.1.1')).status, 429, 'same visitor limited');
 assert.equal((await bookAs('2.2.2.2')).status, 201, 'other visitors unaffected');
-const loginAs = (ip, password) => j('/api/driver/login', 'POST', { username: 'driver', password }, undefined, { 'CF-Connecting-IP': ip });
+const loginAs = (ip, password) => j('/api/driver/login', 'POST', { username: 'jojojose', password }, undefined, { 'CF-Connecting-IP': ip });
 for (let i = 0; i < 10; i++) assert.equal((await loginAs('3.3.3.3', 'nope')).status, 401);
 assert.equal((await loginAs('3.3.3.3', 'test-pass')).status, 429, 'attacker locked out even with right password');
 assert.equal((await loginAs('4.4.4.4', 'test-pass')).status, 200, 'driver on another IP can still log in');

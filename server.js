@@ -198,7 +198,8 @@ async function api(req, res, url) {
   if (m === 'POST' && pathname === '/api/driver/login') {
     if ((hits.get('login:' + clientIp(req)) || []).filter((t) => Date.now() - t < 15 * 60e3).length >= 10) throw new HttpError(429, 'Too many attempts, try again in 15 minutes');
     const { username, password } = await readJson(req);
-    if (!(safeEq(username, config.driverUser) & safeEq(password, config.driverPassword))) {
+    // username ignores case/spaces (phone keyboards capitalise the first letter)
+    if (!(safeEq(String(username || '').trim().toLowerCase(), config.driverUser.toLowerCase()) & safeEq(password, config.driverPassword))) {
       rateLimit(req, 'login', 10, 15 * 60e3); // only wrong attempts count towards the lockout
       throw new HttpError(401, 'Wrong username or password');
     }

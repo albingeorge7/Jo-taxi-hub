@@ -24,7 +24,7 @@ export default {
     taxPercent: Number(env.TAX_PERCENT || 0),
   },
   // Driver login. CHANGE THE PASSWORD before going live (DRIVER_PASSWORD=...).
-  driverUser: env.DRIVER_USER || 'driver',
+  driverUser: env.DRIVER_USER || 'jojojose',
   driverPassword: env.DRIVER_PASSWORD || 'driver123',
   // Optional phone alerts via Telegram bot (create one with @BotFather).
   telegram: { token: env.TELEGRAM_BOT_TOKEN || '', chatId: env.TELEGRAM_CHAT_ID || '' },

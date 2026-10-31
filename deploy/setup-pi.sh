@@ -18,6 +18,7 @@ if [ ! -f "$ENV_FILE" ]; then
   done
   sudo tee "$ENV_FILE" >/dev/null <<EOT
 PORT=3100
+DRIVER_USER=jojojose
 DRIVER_PASSWORD='$PW'
 DATA_DIR=$APP_DIR/data
 # BASE_URL=https://your-address   (set once you know the public address; used in bill links)
