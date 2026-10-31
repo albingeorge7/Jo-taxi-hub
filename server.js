@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import config from './config.js';
-import { renderBill, billEmailText } from './bill.js';
+import { renderBill, billMessage } from './bill.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(__dirname, 'public');
@@ -40,6 +40,8 @@ CREATE TABLE IF NOT EXISTS bills (
 CREATE INDEX IF NOT EXISTS idx_bookings_pickup ON bookings(pickup_at);
 CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
 `);
+
+try { db.exec("ALTER TABLE bookings ADD COLUMN source TEXT NOT NULL DEFAULT 'web'"); } catch { /* column exists */ }
 
 const STATUSES = ['pending', 'confirmed', 'completed', 'cancelled', 'rejected'];
 const round2 = (n) => Math.round(n * 100) / 100;
@@ -115,7 +117,7 @@ async function telegram(text) {
 
 const fmtWhen = (iso) => new Date(iso).toLocaleString('en-GB', { timeZone: config.timezone, dateStyle: 'medium', timeStyle: 'short' });
 const publicBooking = (b) => ({ ref: b.ref, status: b.status, pickup: b.pickup, dropoff: b.dropoff, pickup_at: b.pickup_at, fare: b.fare });
-const baseUrl = (req) => config.baseUrl || `http://${req.headers.host}`;
+const baseUrl = (req) => config.baseUrl || `${req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http'}://${req.headers.host}`;
 
 function newRef() {
   const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -125,23 +127,14 @@ function newRef() {
   }
 }
 
-// ---------- email ----------
-async function sendBillEmail(bill, booking, link) {
-  if (!booking.email) return { sent: false, note: 'Customer gave no email address' };
-  const { host, port, user, pass, from } = config.smtp;
-  if (!host) return { sent: false, note: 'Email (SMTP) not configured on server' };
-  let nodemailer;
-  try { nodemailer = (await import('nodemailer')).default; } catch { return { sent: false, note: 'nodemailer not installed (run npm install)' }; }
-  try {
-    const transport = nodemailer.createTransport({ host, port, secure: port === 465, auth: user ? { user, pass } : undefined });
-    await transport.sendMail({
-      from: from || config.business.email || user, to: booking.email,
-      subject: `Your bill ${bill.number} from ${config.business.name}`,
-      text: billEmailText(bill, booking, link), html: renderBill(bill, booking, { email: true }),
-    });
-    return { sent: true, note: 'Emailed to ' + booking.email };
-  } catch (e) { return { sent: false, note: 'Email failed: ' + e.message }; }
+// WhatsApp wants digits with country code; add the default one for local 10-digit numbers.
+function waNumber(phone) {
+  let d = String(phone || '').replace(/\D/g, '').replace(/^00/, '');
+  if (d.length === 11 && d.startsWith('0')) d = d.slice(1);
+  if (d.length === 10) d = config.countryCode + d;
+  return d;
 }
+const waLink = (phone, bill, booking, link) => `https://wa.me/${waNumber(phone)}?text=${encodeURIComponent(billMessage(bill, booking, link))}`;
 
 const loadBill = (row) => row && { ...row, items: JSON.parse(row.items) };
 
@@ -242,20 +235,31 @@ async function api(req, res, url) {
 
   if (m === 'POST' && pathname === '/api/driver/bills') {
     const b = await readJson(req);
-    const booking = db.prepare('SELECT * FROM bookings WHERE id=?').get(Number(b.booking_id));
-    if (!booking) throw new HttpError(404, 'Booking not found');
-    if (db.prepare('SELECT 1 FROM bills WHERE booking_id=?').get(booking.id)) throw new HttpError(409, 'A bill already exists for this ride');
     if (!Array.isArray(b.items) || !b.items.length || b.items.length > 20) throw new HttpError(400, 'Add at least one bill item');
     const items = b.items.map((it) => {
       const qty = Number(it.qty), rate = Number(it.rate);
       const description = clean(it.description, 120);
-      if (!description || !isFinite(qty) || !isFinite(rate) || qty <= 0) throw new HttpError(400, 'Each item needs a description, quantity and rate');
+      if (!description || !isFinite(qty) || !isFinite(rate) || qty <= 0) throw new HttpError(400, 'Each item needs a description, quantity and amount');
       return { description, qty, rate, amount: round2(qty * rate) };
     });
     const taxPercent = Math.max(0, Math.min(50, Number(b.tax_percent) || 0));
     const subtotal = round2(items.reduce((s, i) => s + i.amount, 0));
-    if (subtotal < 0) throw new HttpError(400, 'Invalid total');
+    if (subtotal <= 0) throw new HttpError(400, 'Bill total must be more than zero');
     const tax = round2(subtotal * taxPercent / 100), total = round2(subtotal + tax);
+
+    let booking;
+    if (b.booking_id) {
+      booking = db.prepare('SELECT * FROM bookings WHERE id=?').get(Number(b.booking_id));
+      if (!booking) throw new HttpError(404, 'Booking not found');
+      if (db.prepare('SELECT 1 FROM bills WHERE booking_id=?').get(booking.id)) throw new HttpError(409, 'A bill already exists for this ride');
+    } else { // ride that was not booked through the website
+      const c = b.customer || {};
+      const phone = clean(c.phone, 20);
+      if (!/^\+?[0-9 ()-]{7,20}$/.test(phone)) throw new HttpError(400, "Enter the customer's WhatsApp number");
+      const info = db.prepare(`INSERT INTO bookings (ref,name,phone,pickup,dropoff,pickup_at,passengers,status,source) VALUES (?,?,?,?,?,?,1,'completed','manual')`)
+        .run(newRef(), clean(c.name, 80) || 'Customer', phone, clean(c.pickup, 200) || '—', clean(c.dropoff, 200) || '—', new Date().toISOString());
+      booking = db.prepare('SELECT * FROM bookings WHERE id=?').get(info.lastInsertRowid);
+    }
     const token = crypto.randomBytes(16).toString('hex');
     const ym = new Date().toISOString().slice(0, 7).replace('-', '');
     const seq = db.prepare('SELECT COUNT(*) c FROM bills').get().c + 1;
@@ -263,14 +267,9 @@ async function api(req, res, url) {
     const info = db.prepare(`INSERT INTO bills (booking_id,token,number,items,subtotal,tax_percent,tax,total,payment_method) VALUES (?,?,?,?,?,?,?,?,?)`)
       .run(booking.id, token, number, JSON.stringify(items), subtotal, taxPercent, tax, total, clean(b.payment_method, 30) || null);
     db.prepare(`UPDATE bookings SET status='completed', fare=? WHERE id=?`).run(total, booking.id);
-    let bill = loadBill(db.prepare('SELECT * FROM bills WHERE id=?').get(info.lastInsertRowid));
+    const bill = loadBill(db.prepare('SELECT * FROM bills WHERE id=?').get(info.lastInsertRowid));
     const link = `${baseUrl(req)}/bill/${token}`;
-    const result = await sendBillEmail(bill, booking, link);
-    db.prepare('UPDATE bills SET sent_at=?, send_note=? WHERE id=?').run(result.sent ? new Date().toISOString() : null, result.note, bill.id);
-    bill = loadBill(db.prepare('SELECT * FROM bills WHERE id=?').get(bill.id));
-    const wa = booking.phone.replace(/\D/g, '');
-    const waText = encodeURIComponent(billEmailText(bill, booking, link));
-    return send(res, 201, { bill, link, emailed: result.sent, note: result.note, whatsapp: `https://wa.me/${wa}?text=${waText}`, sms: `sms:${booking.phone}?body=${waText}` });
+    return send(res, 201, { bill, link, whatsapp: waLink(clean(b.whatsapp_to, 20) || booking.phone, bill, booking, link) });
   }
 
   const resend = pathname.match(/^\/api\/driver\/bills\/(\d+)\/send$/);
@@ -279,10 +278,7 @@ async function api(req, res, url) {
     if (!bill) throw new HttpError(404, 'No bill for this ride');
     const booking = db.prepare('SELECT * FROM bookings WHERE id=?').get(bill.booking_id);
     const link = `${baseUrl(req)}/bill/${bill.token}`;
-    const r = await sendBillEmail(bill, booking, link);
-    if (r.sent) db.prepare('UPDATE bills SET sent_at=?, send_note=? WHERE id=?').run(new Date().toISOString(), r.note, bill.id);
-    const waText = encodeURIComponent(billEmailText(bill, booking, link));
-    return send(res, 200, { link, emailed: r.sent, note: r.note, whatsapp: `https://wa.me/${booking.phone.replace(/\D/g, '')}?text=${waText}` });
+    return send(res, 200, { link, whatsapp: waLink(booking.phone, bill, booking, link) });
   }
 
   throw new HttpError(404, 'Not found');
@@ -311,7 +307,7 @@ function stats() {
     hours[Number(new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', hour12: false }).format(new Date(b.pickup_at))) % 24]++;
   }
   const top = (key) => {
-    const c = {}; for (const b of all) { const k = b[key].toLowerCase(); c[k] = c[k] || { label: b[key], n: 0 }; c[k].n++; }
+    const c = {}; for (const b of all) { if (b[key] === '—') continue; const k = b[key].toLowerCase(); c[k] = c[k] || { label: b[key], n: 0 }; c[k].n++; }
     return Object.values(c).sort((a, b) => b.n - a.n).slice(0, 5);
   };
   const decided = byStatus.completed + byStatus.cancelled + byStatus.rejected;

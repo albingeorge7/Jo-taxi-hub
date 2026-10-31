@@ -16,7 +16,7 @@ const dayLabel = (iso) => new Date(iso).toLocaleDateString([], { weekday: 'long'
 const dayKey = (iso) => { const d = new Date(iso); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; };
 
 // ---------- login ----------
-function showLogin() { $('#loginView').classList.remove('hidden'); $('#app').classList.add('hidden'); $('#logout').classList.add('hidden'); if (es) es.close(); }
+function showLogin() { $('#fabBill').classList.add('hidden'); $('#loginView').classList.remove('hidden'); $('#app').classList.add('hidden'); $('#logout').classList.add('hidden'); if (es) es.close(); }
 $('#loginForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   try { await api('/api/driver/login', 'POST', Object.fromEntries(new FormData(e.target))); e.target.reset(); start(); }
@@ -26,7 +26,7 @@ $('#logout').addEventListener('click', async (e) => { e.preventDefault(); await 
 
 async function start() {
   info = await (await fetch('/api/info')).json(); cur = info.currency;
-  $('#loginView').classList.add('hidden'); $('#app').classList.remove('hidden'); $('#logout').classList.remove('hidden');
+  $('#loginView').classList.add('hidden'); $('#app').classList.remove('hidden'); $('#fabBill').classList.remove('hidden'); $('#logout').classList.remove('hidden');
   $('#alertBar').classList.toggle('hidden', audioOk && (!('Notification' in window) || Notification.permission !== 'default'));
   await refresh(); connect();
 }
@@ -62,7 +62,7 @@ function rideCard(b, { actions = true } = {}) {
     if (b.status === 'completed' && !b.bill_token) a.push(`<button class="btn sm green" data-bill="${b.id}">${ic('receipt')}Generate bill</button>`);
   }
   return `<div class="card ride st-${b.status}"><div class="top"><div class="route">${esc(b.pickup)} &rarr; ${esc(b.dropoff)}</div><span class="badge s-${b.status}">${b.status}</span></div>
-  <div class="meta"><span>${ic('calendar')}${when(b.pickup_at)}</span><span>${ic('users')}${b.passengers} pax</span>${b.fare ? `<span>${ic('rupee')}${money(b.fare).replace(cur, '')}</span>` : ''}<span>${esc(b.ref)}</span></div>
+  <div class="meta"><span>${ic('calendar')}${when(b.pickup_at)}</span><span>${ic('users')}${b.passengers} pax</span>${b.fare ? `<span>${ic('rupee')}${money(b.fare).replace(cur, '')}</span>` : ''}<span>${esc(b.ref)}</span>${b.source === 'manual' ? '<span class="tag">Manual bill</span>' : ''}</div>
   <div class="who"><span>${ic('user')}${esc(b.name)}</span><a href="${tel}">${ic('phone')}${esc(b.phone)}</a>${b.email ? `<span>${ic('mail')}${esc(b.email)}</span>` : ''}</div>
   ${b.notes ? `<div class="muted">${ic('note')} ${esc(b.notes)}</div>` : ''}
   ${conflictOf(b)}
@@ -125,43 +125,81 @@ document.addEventListener('click', async (e) => {
       if (['cancelled', 'rejected'].includes(el.dataset.act) && !confirm('Are you sure?')) return;
       await api('/api/driver/bookings/' + el.dataset.id, 'PATCH', { status: el.dataset.act }); await refresh();
     } else if (el.dataset.bill) openBill(bookings.find((b) => b.id == el.dataset.bill));
-    else if (el.dataset.resend) { const r = await api(`/api/driver/bills/${el.dataset.resend}/send`, 'POST', {}); toast(r.note + (r.emailed ? '' : ` — <a style="color:#fde68a" target="_blank" href="${r.whatsapp}">Send via WhatsApp</a>`), 8000); }
+    else if (el.dataset.resend) { const w = window.open('', '_blank'); try { const r = await api(`/api/driver/bills/${el.dataset.resend}/send`, 'POST', {}); w.location = r.whatsapp; } catch (e2) { w.close(); throw e2; } }
   } catch (err) { toast(esc(err.message)); }
 });
 
 // ---------- billing ----------
-function itemRow(d = '', q = 1, r = '') {
-  return `<tr><td style="width:46%"><input placeholder="Description" value="${esc(d)}" class="i-d"></td><td><input type="number" min="0" step="any" value="${q}" class="i-q" placeholder="Qty"></td><td><input type="number" min="0" step="any" value="${r}" class="i-r" placeholder="Rate"></td><td><button type="button" class="btn sm sec rm">${ic('x')}</button></td></tr>`;
+let billMode = 'km';
+function extraRow(d = '', amt = '') {
+  return `<tr><td style="width:55%"><input placeholder="Description" value="${esc(d)}" class="x-d"></td><td><input type="number" min="0" step="any" inputmode="decimal" value="${amt}" class="x-a" placeholder="Amount"></td><td><button type="button" class="btn sm sec rm">${ic('x')}</button></td></tr>`;
 }
-function openBill(b) {
+function setMode(m) {
+  billMode = m;
+  document.querySelectorAll('#modeSeg button').forEach((b) => b.classList.toggle('on', b.dataset.mode === m));
+  $('#modeKm').classList.toggle('hidden', m !== 'km'); $('#modeFixed').classList.toggle('hidden', m !== 'fixed');
+  calc();
+}
+function openBill(b) { // b = booking, or null for a ride that was not booked on the site
   billBooking = b;
-  $('#billFor').textContent = `${b.name} • ${b.pickup} → ${b.dropoff} • ${b.ref}`;
-  $('#billItems').innerHTML = itemRow('Base fare', 1, info.baseFare) + itemRow('Distance (km)', '', info.ratePerKm) + itemRow('Waiting / tolls / parking', 1, '');
-  $('#billForm').tax.value = info.taxPercent || 0; $('#billMsg').innerHTML = ''; calc(); $('#billDlg').showModal();
+  const f = $('#billForm'); f.reset();
+  $('#billTitle').textContent = b ? 'Complete & bill' : 'New bill (walk-in / phone ride)';
+  $('#custSummary').classList.toggle('hidden', !b); $('#custFields').classList.toggle('hidden', !!b);
+  if (b) { $('#custSummary').innerHTML = `${ic('user')} ${esc(b.name)} &bull; ${esc(b.pickup)} &rarr; ${esc(b.dropoff)} &bull; ${esc(b.ref)}`; f.wa.value = b.phone; }
+  f.rate.value = info.ratePerKm || ''; f.base.value = info.baseFare || ''; f.tax.value = info.taxPercent || 0;
+  $('#extraRows').innerHTML = '';
+  $('#billMsg').innerHTML = ''; $('#billSave').classList.remove('hidden'); $('#billSave').disabled = false;
+  setMode('km'); $('#billDlg').showModal();
 }
 function readItems() {
-  return [...document.querySelectorAll('#billItems tr')].map((tr) => ({ description: tr.querySelector('.i-d').value, qty: Number(tr.querySelector('.i-q').value), rate: Number(tr.querySelector('.i-r').value) }))
-    .filter((i) => i.description.trim() && i.qty > 0 && i.rate > 0);
+  const f = $('#billForm'), n = (v) => Number(v) || 0, items = [];
+  if (billMode === 'fixed') {
+    if (n(f.famt.value) > 0) items.push({ description: f.fdesc.value.trim() || 'Cab fare', qty: 1, rate: n(f.famt.value) });
+    return items;
+  }
+  if (n(f.base.value) > 0) items.push({ description: 'Base fare', qty: 1, rate: n(f.base.value) });
+  if (n(f.km.value) > 0 && n(f.rate.value) > 0) items.push({ description: `Distance (${n(f.km.value)} km @ ${cur}${n(f.rate.value)}/km)`, qty: n(f.km.value), rate: n(f.rate.value) });
+  document.querySelectorAll('#extraRows tr').forEach((tr) => {
+    const d = tr.querySelector('.x-d').value.trim(), a = n(tr.querySelector('.x-a').value);
+    if (d && a > 0) items.push({ description: d, qty: 1, rate: a });
+  });
+  return items;
 }
 function calc() {
   const sub = readItems().reduce((s, i) => s + i.qty * i.rate, 0), tax = Number($('#billForm').tax.value) || 0;
   $('#billTotal').textContent = `Total: ${money(sub * (1 + tax / 100))}`;
 }
 $('#billForm').addEventListener('input', calc);
-$('#addItem').onclick = () => { $('#billItems').insertAdjacentHTML('beforeend', itemRow()); };
-$('#billItems').addEventListener('click', (e) => { if (e.target.classList.contains('rm')) { e.target.closest('tr').remove(); calc(); } });
+$('#modeSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setMode(b.dataset.mode); });
+$('#billDlg').addEventListener('click', (e) => {
+  const chip = e.target.closest('[data-extra]');
+  if (chip) { $('#extraRows').insertAdjacentHTML('beforeend', extraRow(chip.dataset.extra)); $('#extraRows tr:last-child ' + (chip.dataset.extra ? '.x-a' : '.x-d')).focus(); }
+  if (e.target.closest('.rm')) { e.target.closest('tr').remove(); calc(); }
+});
+$('#fabBill').onclick = () => openBill(null);
 $('#billCancel').onclick = () => $('#billDlg').close();
 $('#billForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const items = readItems(); if (!items.length) return ($('#billMsg').innerHTML = '<div class="msg err">Add at least one item with a quantity and rate.</div>');
+  const f = e.target, items = readItems();
+  const err = (m) => ($('#billMsg').innerHTML = `<div class="msg err">${ic('x')}<div>${esc(m)}</div></div>`);
+  if (!items.length) return err(billMode === 'fixed' ? 'Enter the fare amount.' : 'Enter distance and rate, a base fare, or at least one extra.');
   $('#billSave').disabled = true;
   try {
-    const r = await api('/api/driver/bills', 'POST', { booking_id: billBooking.id, items, tax_percent: e.target.tax.value, payment_method: e.target.pay.value });
-    $('#billMsg').innerHTML = `<div class="msg ok">${ic('check')}<div>Bill ${esc(r.bill.number)} created (${money(r.bill.total)}).<br>${esc(r.note)}.<br>
-      <a target="_blank" href="${r.link}">Open bill</a> • <a target="_blank" rel="noopener" href="${r.whatsapp}">Send via WhatsApp</a> • <a href="${r.sms}">Send via SMS</a></div>`;
+    const payload = { items, tax_percent: f.tax.value, payment_method: f.pay.value, whatsapp_to: f.wa.value };
+    if (billBooking) payload.booking_id = billBooking.id;
+    else payload.customer = { name: f.cname.value, phone: f.wa.value, pickup: f.ctrip.value.split(/\s*(?:→|->|\s+to\s+)\s*/i)[0] || '', dropoff: f.ctrip.value.split(/\s*(?:→|->|\s+to\s+)\s*/i)[1] || '' };
+    const r = await api('/api/driver/bills', 'POST', payload);
+    $('#billSave').classList.add('hidden');
+    $('#billMsg').innerHTML = `<div class="msg ok">${ic('check')}<div>Bill ${esc(r.bill.number)} created &mdash; ${money(r.bill.total)}</div></div>
+      <a class="btn green block" target="_blank" rel="noopener" href="${r.whatsapp}">${ic('whatsapp')}Send bill on WhatsApp</a>
+      <div class="actions" style="margin-top:8px"><a class="btn sm sec" target="_blank" href="${r.link}">${ic('receipt')}Open bill</a><button type="button" class="btn sm sec" id="copyLink" data-link="${esc(r.link)}">Copy link</button></div>`;
+    $('#billMsg').scrollIntoView({ block: 'end', behavior: 'smooth' });
     await refresh();
-  } catch (err) { $('#billMsg').innerHTML = `<div class="msg err">${ic('x')}<div>${esc(err.message)}</div></div>`; }
-  $('#billSave').disabled = false;
+  } catch (e2) { err(e2.message); $('#billSave').disabled = false; }
+});
+document.addEventListener('click', async (e) => {
+  const c = e.target.closest('#copyLink'); if (!c) return;
+  try { await navigator.clipboard.writeText(c.dataset.link); c.textContent = 'Copied'; } catch { prompt('Copy this link', c.dataset.link); }
 });
 
 // ---------- live alerts ----------

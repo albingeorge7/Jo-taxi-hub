@@ -6,6 +6,7 @@ export default {
   baseUrl: env.BASE_URL || '',            // public URL, used in bill links e.g. https://mycab.example.com
   timezone: env.TIMEZONE || 'Asia/Kolkata',
   currency: env.CURRENCY || '₹',
+  countryCode: env.COUNTRY_CODE || '91', // added to 10-digit numbers for WhatsApp links
   business: {
     name: env.BUSINESS_NAME || 'JO Taxi Cab',
     tagline: env.TAGLINE || 'Airport pickup & drop available • 24/7 service',
@@ -27,6 +28,4 @@ export default {
   driverPassword: env.DRIVER_PASSWORD || 'driver123',
   // Optional phone alerts via Telegram bot (create one with @BotFather).
   telegram: { token: env.TELEGRAM_BOT_TOKEN || '', chatId: env.TELEGRAM_CHAT_ID || '' },
-  // Optional email for bills: install nodemailer (npm i) and set SMTP_*.
-  smtp: { host: env.SMTP_HOST || '', port: Number(env.SMTP_PORT || 587), user: env.SMTP_USER || '', pass: env.SMTP_PASS || '', from: env.SMTP_FROM || '' },
 };

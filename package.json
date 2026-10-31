@@ -5,6 +5,5 @@
   "type": "module",
   "main": "server.js",
   "scripts": { "start": "node server.js", "test": "node test.mjs" },
-  "engines": { "node": ">=22.5" },
-  "optionalDependencies": { "nodemailer": "^6.9.0" }
+  "engines": { "node": ">=22.5" }
 }

@@ -4,11 +4,12 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const money = (n) => `${config.currency}${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const when = (iso, opts = { dateStyle: 'medium', timeStyle: 'short' }) => new Date(iso).toLocaleString('en-GB', { timeZone: config.timezone, ...opts });
 
-export function billEmailText(bill, booking, link) {
-  return `Hello ${booking.name},\n\nThank you for riding with ${config.business.name}.\nBill ${bill.number} for your trip ${booking.pickup} → ${booking.dropoff}: total ${money(bill.total)}.\n\nView / print your bill: ${link}\n\n${config.business.driverName}, ${config.business.phone}`;
+export function billMessage(bill, booking, link) {
+  const trip = booking.pickup === '—' && booking.dropoff === '—' ? '' : ` for your trip ${booking.pickup} → ${booking.dropoff}`;
+  return `Hello ${booking.name},\n\nThank you for riding with ${config.business.name}.\nBill ${bill.number}${trip}: total ${money(bill.total)}.\n\nView / print your bill: ${link}\n\n${config.business.driverName}, ${config.business.phone}`;
 }
 
-export function renderBill(bill, booking, { email = false } = {}) {
+export function renderBill(bill, booking) {
   const b = config.business;
   const rows = bill.items.map((i) => `<tr><td>${esc(i.description)}</td><td class="r">${+i.qty}</td><td class="r">${money(i.rate)}</td><td class="r">${money(i.amount)}</td></tr>`).join('');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -25,13 +26,13 @@ h1{margin:0;font-size:22px;color:#e11d2a}.top{display:flex;justify-content:space
 <div class="top"><div><h1>${esc(b.name)}</h1><div class="muted">${esc(b.driverName)}<br>${esc(b.address)}<br>${esc(b.phone)}${b.email ? ' • ' + esc(b.email) : ''}${b.licence ? '<br>Vehicle: ' + esc(b.licence) : ''}</div></div>
 <div class="muted" style="text-align:right"><strong style="font-size:16px;color:#111827">BILL ${esc(bill.number)}</strong><br>Date: ${esc(when(bill.created_at, { dateStyle: 'medium' }))}<br>Booking: ${esc(booking.ref)}</div></div>
 <p><strong>Billed to:</strong> ${esc(booking.name)}<br><span class="muted">${esc(booking.phone)}${booking.email ? ' • ' + esc(booking.email) : ''}</span></p>
-<p><strong>Trip:</strong> ${esc(booking.pickup)} → ${esc(booking.dropoff)}<br><span class="muted">Pickup: ${esc(when(booking.pickup_at))} • ${booking.passengers} passenger(s)</span></p>
+${booking.pickup === '—' && booking.dropoff === '—' ? `<p class="muted">Date: ${esc(when(booking.pickup_at))}</p>` : `<p><strong>Trip:</strong> ${esc(booking.pickup)} → ${esc(booking.dropoff)}<br><span class="muted">Pickup: ${esc(when(booking.pickup_at))} • ${booking.passengers} passenger(s)</span></p>`}
 <table><thead><tr><th>Description</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Amount</th></tr></thead><tbody>${rows}</tbody>
 <tfoot><tr class="tot"><td colspan="3" class="r">Subtotal</td><td class="r">${money(bill.subtotal)}</td></tr>
 ${bill.tax_percent ? `<tr class="tot"><td colspan="3" class="r">Tax (${+bill.tax_percent}%)</td><td class="r">${money(bill.tax)}</td></tr>` : ''}
 <tr class="tot grand"><td colspan="3" class="r">Total</td><td class="r">${money(bill.total)}</td></tr></tfoot></table>
 ${bill.payment_method ? `<p class="muted">Payment: ${esc(bill.payment_method)}</p>` : ''}
 <p class="muted">Thank you for riding with us!</p>
-${email ? '' : '<button class="btn" onclick="window.print()">Print / Save as PDF</button>'}
+<button class="btn" onclick="window.print()">Print / Save as PDF</button>
 </div></body></html>`;
 }

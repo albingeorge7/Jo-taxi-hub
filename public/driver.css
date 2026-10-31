@@ -42,3 +42,13 @@ dialog h2{display:flex;gap:10px;align-items:center;margin-top:0}dialog h2 .ic{co
 .login{max-width:400px;margin:56px auto}.login .logo{font-size:54px;margin-bottom:6px;align-items:center;width:100%}
 .login .card{padding:26px}.login h2{text-align:center;margin-bottom:16px}
 .history-filter{max-width:240px}
+
+.fab-bill{position:fixed;right:16px;bottom:18px;z-index:25;display:flex;align-items:center;gap:8px;border:0;border-radius:99px;padding:14px 20px;background:var(--red);color:#fff;font:inherit;font-weight:700;font-size:15px;cursor:pointer;box-shadow:0 10px 24px rgba(225,29,42,.45)}
+.fab-bill .ic{font-size:20px}.fab-bill:active{transform:translateY(1px)}
+.seg{display:flex;background:#eef1f7;border-radius:12px;padding:4px;margin:6px 0 16px}
+.seg button{flex:1;border:0;background:none;padding:10px 6px;border-radius:9px;font:inherit;font-weight:600;font-size:14px;color:var(--muted);display:flex;gap:6px;align-items:center;justify-content:center;cursor:pointer}
+.seg button.on{background:#fff;color:var(--red);box-shadow:0 1px 4px rgba(15,23,42,.15)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}.chip{border:1px solid #cbd5e1;background:#fff;color:var(--navy);border-radius:99px;padding:5px 12px;font:inherit;font-size:13px;cursor:pointer}.chip:hover{background:#f1f5f9}
+.billtotal{font-size:20px;font-weight:800;text-align:right;color:var(--navy);margin:2px 0 6px}
+dialog .row{display:grid;gap:12px;grid-template-columns:1fr 1fr}@media(max-width:480px){dialog .row{grid-template-columns:1fr}}
+.tag{background:#eef1f7;color:var(--navy);border-radius:6px;padding:0 7px;font-size:12px;font-weight:600}
