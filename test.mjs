@@ -49,6 +49,11 @@ assert.equal((await j('/api/driver/bills', 'POST', { booking_id: id, items: [{ d
 const page = await fetch(bill.data.link.replace(/^https?:\/\/[^/]+/, base));
 const html = await page.text();
 assert.ok(html.includes('199.50') && html.includes('&lt;b&gt;Asha'), 'bill renders & escapes');
+assert.ok(html.includes('upi://pay?pa=jojojosemangalan-1@okaxis&amp;pn=') && html.includes('am=199.50'), 'UPI pay link on the bill');
+assert.ok(decodeURIComponent(bill.data.whatsapp).includes('Pay by UPI: jojojosemangalan-1@okaxis'), 'UPI id in WhatsApp message');
+const paid = await j('/api/driver/bills', 'POST', { customer: { name: 'Cash Cust', pickup: 'A', dropoff: 'B', phone: '9847011133' }, items: [{ description: 'Fare', qty: 1, rate: 100 }], payment_method: 'Cash' }, cookie);
+assert.ok(!decodeURIComponent(paid.data.whatsapp).includes('Pay by UPI'), 'no UPI request on cash bills');
+assert.ok(!(await (await fetch(paid.data.link.replace(/^https?:\/\/[^/]+/, base))).text()).includes('upi://pay'), 'no pay button on cash bills');
 
 // manual bill (ride not booked on the site), fixed amount, number without country code
 const man = await j('/api/driver/bills', 'POST', { customer: { name: 'Walk In', phone: '98470 11122', pickup: 'Aluva', dropoff: 'Munnar' }, items: [{ description: 'Cab fare', qty: 1, rate: 3500 }], whatsapp_to: '98470 11122' }, cookie);
@@ -58,7 +63,7 @@ for (const c of [{ phone: '9847011122', pickup: 'A', dropoff: 'B' }, { name: 'X'
   assert.equal((await j('/api/driver/bills', 'POST', { customer: c, items: [{ description: 'f', qty: 1, rate: 5 }] }, cookie)).status, 400, 'name/pickup/drop mandatory');
 assert.equal((await j('/api/driver/bills', 'POST', { customer: { name: 'x', pickup: 'A', dropoff: 'B', phone: 'abc' }, items: [{ description: 'f', qty: 1, rate: 5 }] }, cookie)).status, 400);
 assert.equal((await j('/api/driver/bills', 'POST', { customer: { name: 'x', pickup: 'A', dropoff: 'B', phone: '9847011122' }, items: [{ description: 'f', qty: 1, rate: 0 }] }, cookie)).status, 400);
-assert.equal((await j('/api/driver/bookings', 'GET', null, cookie)).data.length, 2, 'failed bills leave no orphan bookings');
+assert.equal((await j('/api/driver/bookings', 'GET', null, cookie)).data.length, 3, 'failed bills leave no orphan bookings');
 
 // PDF bill
 const pdfRes = await fetch(bill.data.link.replace(/^https?:\/\/[^/]+/, base) + '.pdf');
@@ -83,10 +88,10 @@ assert.equal(vs.range.devices[0].label, 'mobile');
 assert.equal(vs.range.totals.conversion, 100, 'booked / visitors');
 
 const st = (await j('/api/driver/stats', 'GET', null, cookie)).data;
-assert.equal(st.range.preset, '30d'); assert.equal(st.range.totals.completed, 2); assert.equal(st.range.totals.revenue, 3699.5);
+assert.equal(st.range.preset, '30d'); assert.equal(st.range.totals.completed, 3); assert.equal(st.range.totals.revenue, 3799.5);
 const sj = (q) => j('/api/driver/stats?' + q, 'GET', null, cookie);
-assert.equal((await sj('preset=all')).data.range.totals.revenue, 3699.5);
-assert.equal((await sj('preset=today')).data.range.totals.completed, 2, 'rides billed today fall in today');
+assert.equal((await sj('preset=all')).data.range.totals.revenue, 3799.5);
+assert.equal((await sj('preset=today')).data.range.totals.completed, 3, 'rides billed today fall in today');
 const old = (await sj('preset=custom&from=2020-01-01&to=2020-01-31')).data; assert.equal(old.range.totals.revenue, 0); assert.equal(old.range.days, 31);
 assert.equal((await sj('preset=custom&from=2020-02-01&to=2020-01-01')).status, 400, 'reversed range rejected');
 assert.equal((await sj('preset=custom&from=nope&to=2020-01-01')).status, 400);

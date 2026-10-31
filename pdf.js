@@ -70,6 +70,10 @@ export function buildBillPdf(bill, booking) {
   text('TOTAL', cRate, y - 8, { size: 13, bold: true, align: 'right' }); text(money(bill.total), cAmt - 8, y - 8, { size: 15, bold: true, rgb: RED, align: 'right' });
   y -= 36;
   if (bill.payment_method) text(`Payment: ${bill.payment_method}`, 40, y, { size: 10, rgb: GREY });
+  if (!['cash', 'card'].includes(String(bill.payment_method || '').toLowerCase()) && config.upi.id) {
+    rect(40, y - 62, W - 80, 48, '0.94 0.97 0.94'); text('PAY BY UPI', 52, y - 28, { size: 8, bold: true, rgb: GREY });
+    text(config.upi.id, 52, y - 46, { size: 13, bold: true, rgb: NAVY }); text(`Amount: ${money(bill.total)}`, W - 52, y - 46, { size: 11, bold: true, align: 'right' });
+  }
 
   // footer
   line(40, 70, W - 40, 70);

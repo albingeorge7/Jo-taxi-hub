@@ -25,6 +25,8 @@ export default {
     baseFare: Number(env.BASE_FARE || 50),
     taxPercent: Number(env.TAX_PERCENT || 0),
   },
+  // UPI id shown on bills so customers can pay by UPI.
+  upi: { id: env.UPI_ID || 'jojojosemangalan-1@okaxis', name: env.UPI_NAME || env.DRIVER_NAME || 'Jojo Jose' },
   // Driver login. CHANGE THE PASSWORD before going live (DRIVER_PASSWORD=...).
   driverUser: env.DRIVER_USER || 'jojojose',
   driverPassword: env.DRIVER_PASSWORD || 'driver123',
