@@ -122,17 +122,29 @@ function rateLimit(req, key, max, windowMs) {
 }
 setInterval(() => { const now = Date.now(); for (const [k, v] of hits) if (!v.some((t) => now - t < 3600e3)) hits.delete(k); }, 600e3).unref();
 
-// sessions (in memory; driver just logs in again after a restart)
-const sessions = new Map();
-const SESSION_MS = 12 * 3600e3;
-setInterval(() => { for (const [k, v] of sessions) if (v.expires < Date.now()) sessions.delete(k); }, 3600e3).unref();
+// Driver sessions are stored in the database, so the driver stays logged in on the same browser across
+// browser restarts and server restarts. 30 days, renewed whenever the dashboard is opened.
+db.exec(`CREATE TABLE IF NOT EXISTS sessions (
+  id TEXT PRIMARY KEY,                -- sha256 of the cookie token (the token itself is never stored)
+  expires INTEGER NOT NULL, pw TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+)`);
+const SESSION_MS = 30 * 86400e3;
+// fingerprint of the login details: changing DRIVER_USER / DRIVER_PASSWORD signs every device out
+const credFingerprint = () => crypto.createHmac('sha256', SALT).update(`${config.driverUser}\n${config.driverPassword}`).digest('hex');
+const sessionId = (token) => crypto.createHash('sha256').update(String(token)).digest('hex');
+const purgeSessions = () => db.prepare('DELETE FROM sessions WHERE expires < ?').run(Date.now());
+purgeSessions(); setInterval(purgeSessions, 3600e3).unref();
+const isHttps = (req) => config.baseUrl.startsWith('https') || req.headers['x-forwarded-proto'] === 'https';
+const sessionCookie = (req, token, maxAgeSec) => `sid=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAgeSec}${isHttps(req) ? '; Secure' : ''}`;
 function parseCookies(req) {
   return Object.fromEntries((req.headers.cookie || '').split(';').map((s) => s.trim().split('=')).filter((p) => p[0]).map(([k, ...v]) => [k, v.join('=')]));
 }
 function isDriver(req) {
-  const sid = parseCookies(req).sid; const s = sid && sessions.get(sid);
-  if (!s) return false;
-  if (s.expires < Date.now()) { sessions.delete(sid); return false; }
+  const token = parseCookies(req).sid; if (!token) return false;
+  const row = db.prepare('SELECT expires, pw FROM sessions WHERE id=?').get(sessionId(token));
+  if (!row) return false;
+  if (row.expires < Date.now() || row.pw !== credFingerprint()) { db.prepare('DELETE FROM sessions WHERE id=?').run(sessionId(token)); return false; }
   return true;
 }
 function requireDriver(req) { if (!isDriver(req)) throw new HttpError(401, 'Please log in'); }
@@ -279,15 +291,20 @@ async function api(req, res, url) {
       rateLimit(req, 'login', 10, 15 * 60e3); // only wrong attempts count towards the lockout
       throw new HttpError(401, 'Wrong username or password');
     }
-    const sid = crypto.randomBytes(24).toString('hex');
-    sessions.set(sid, { expires: Date.now() + SESSION_MS });
-    return send(res, 200, { ok: true }, { 'Set-Cookie': `sid=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS / 1000}${config.baseUrl.startsWith('https') ? '; Secure' : ''}` });
+    const token = crypto.randomBytes(32).toString('hex');
+    db.prepare('INSERT INTO sessions (id, expires, pw) VALUES (?,?,?)').run(sessionId(token), Date.now() + SESSION_MS, credFingerprint());
+    return send(res, 200, { ok: true }, { 'Set-Cookie': sessionCookie(req, token, SESSION_MS / 1000) });
   }
   if (m === 'POST' && pathname === '/api/driver/logout') {
-    sessions.delete(parseCookies(req).sid);
-    return send(res, 200, { ok: true }, { 'Set-Cookie': 'sid=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0' });
+    const token = parseCookies(req).sid; if (token) db.prepare('DELETE FROM sessions WHERE id=?').run(sessionId(token));
+    return send(res, 200, { ok: true }, { 'Set-Cookie': sessionCookie(req, '', 0) });
   }
-  if (m === 'GET' && pathname === '/api/driver/me') return send(res, 200, { loggedIn: isDriver(req) });
+  if (m === 'GET' && pathname === '/api/driver/me') {
+    if (!isDriver(req)) return send(res, 200, { loggedIn: false });
+    const token = parseCookies(req).sid; // opening the dashboard renews the 30 days
+    db.prepare('UPDATE sessions SET expires=? WHERE id=?').run(Date.now() + SESSION_MS, sessionId(token));
+    return send(res, 200, { loggedIn: true }, { 'Set-Cookie': sessionCookie(req, token, SESSION_MS / 1000) });
+  }
 
   if (!pathname.startsWith('/api/driver/')) throw new HttpError(404, 'Not found');
   requireDriver(req);

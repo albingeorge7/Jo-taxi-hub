@@ -11,6 +11,7 @@ DRIVER_ADDRESS="12 Main Rd, Kochi" npm start
 - Driver dashboard: http://localhost:3000/driver (the Pi script uses port 3100). Default username `jojojose`; set the password with `DRIVER_PASSWORD` — never use the default `driver123`.
 
 ## Driver dashboard
+- **Stays signed in** on the same browser for 30 days (renewed every time the dashboard is opened), even after the browser or the Pi restarts. Logging out, or changing `DRIVER_PASSWORD`, signs devices out.
 - **Requests** – new bookings appear instantly with sound, vibration and a browser notification (tap "Enable sound & notifications" once). Accept / reject.
 - **Schedule** – upcoming rides grouped by day, with warnings for clashing rides (within 90 min).
 - **Analytics** – pick Today, 7 days, 30 days, This month, Last month, All time or any custom from–to dates. Shows revenue, rides, bookings, average fare, completion rate, repeat customers, revenue and request charts (per day, or per month for long ranges), busiest hours and top routes.

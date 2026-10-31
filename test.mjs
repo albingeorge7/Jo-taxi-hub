@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import os from 'node:os'; import fs from 'node:fs'; import path from 'node:path';
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cab-'));
 process.env.DRIVER_PASSWORD = 'test-pass';
-const { server } = await import('./server.js');
+const { server, config: liveConfig } = await import('./server.js');
 await new Promise((r) => server.listen(0, r));
 const base = `http://localhost:${server.address().port}`;
 const j = async (url, method = 'GET', body, cookie, extra = {}) => {
@@ -144,4 +144,17 @@ const longDesc = 'Leg 2 · 17 Sep 2026: Cochin International Airport Nedumbasser
 const ld = await j('/api/driver/bills', 'POST', { customer: { name: 'Long', pickup: 'A', dropoff: 'B', phone: '9847011177' }, items: [{ description: longDesc, qty: 1, rate: 10 }] }, cookie);
 assert.ok(ld.data.bill.items[0].description.length > 100 && ld.data.bill.items[0].description.endsWith('₹14/km)'), 'long leg descriptions are not cut off');
 assert.equal((await fetch(ld.data.link.replace(/^https?:\/\/[^/]+/, base) + '.pdf')).status, 200, 'PDF builds with a long description');
+// persistent login: 30-day cookie, renewed on use, stored server-side, ends on logout or password change
+assert.ok(login.headers.get('set-cookie').includes('Max-Age=2592000'), 'login cookie lasts 30 days');
+const me = await j('/api/driver/me', 'GET', null, cookie);
+assert.equal(me.data.loggedIn, true); assert.ok(me.headers.get('set-cookie')?.includes('Max-Age=2592000'), 'opening the dashboard renews the cookie');
+const other = (await loginAs('6.6.6.6', 'test-pass')).headers.get('set-cookie').split(';')[0];
+liveConfig.driverPassword = 'changed-password';
+assert.equal((await j('/api/driver/me', 'GET', null, cookie)).data.loggedIn, false, 'password change signs every device out');
+assert.equal((await j('/api/driver/me', 'GET', null, other)).data.loggedIn, false);
+liveConfig.driverPassword = 'test-pass';
+const again = (await loginAs('7.7.7.7', 'test-pass')).headers.get('set-cookie').split(';')[0];
+assert.equal((await j('/api/driver/me', 'GET', null, again)).data.loggedIn, true);
+await j('/api/driver/logout', 'POST', {}, again);
+assert.equal((await j('/api/driver/me', 'GET', null, again)).data.loggedIn, false, 'logout ends the session');
 console.log('All tests passed'); process.exit(0);
