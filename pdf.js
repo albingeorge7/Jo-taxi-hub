@@ -23,82 +23,113 @@ const money = (n) => clean(`${config.currency}${Number(n).toLocaleString('en-IN'
 const when = (iso, opts) => new Date(iso).toLocaleString('en-GB', { timeZone: config.timezone, ...opts });
 
 export function buildBillPdf(bill, booking) {
-  const b = config.business, ops = [];
-  const NAVY = '0.071 0.188 0.42', RED = '0.882 0.114 0.165', GREY = '0.4 0.45 0.52', INK = '0.06 0.09 0.16';
-  const rect = (x, y, w, h, rgb) => ops.push(`${rgb} rg ${x.toFixed(2)} ${y.toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} re f`);
-  const line = (x1, y1, x2, y2, rgb = '0.89 0.91 0.94', lw = 0.7) => ops.push(`${rgb} RG ${lw} w ${x1} ${y1} m ${x2} ${y2} l S`);
-  const text = (s, x, y, { size = 10, bold = false, rgb = INK, align = 'left' } = {}) => {
-    const w = textWidth(s, size, bold), px = align === 'right' ? x - w : align === 'center' ? x - w / 2 : x;
-    ops.push(`BT ${rgb} rg /${bold ? 'F2' : 'F1'} ${size} Tf ${px.toFixed(2)} ${y.toFixed(2)} Td (${esc(s)}) Tj ET`);
+  const b = config.business, [first, ...rest] = b.name.trim().split(/\s+/);
+  const NAVY = '0.071 0.188 0.42', NAVY_D = '0.043 0.122 0.29', RED = '0.882 0.114 0.165', GREY = '0.4 0.45 0.52', INK = '0.06 0.09 0.16';
+  const SOFT = '0.965 0.973 0.988', LINE = '0.886 0.91 0.941', ZEBRA = '0.984 0.988 0.996', LIGHT = '0.78 0.83 0.93';
+  const paid = ['cash', 'card'].includes(String(bill.payment_method || '').toLowerCase());
+  const hasTrip = !(booking.pickup === '—' && booking.dropoff === '—');
+  const M = 40, R = W - M;
+  const pages = []; let ops;                       // all coordinates below are measured from the TOP of the page
+  const addPage = () => { ops = []; pages.push(ops); };
+  const rect = (x, top, w, h, rgb) => ops.push(`${rgb} rg ${x.toFixed(2)} ${(H - top - h).toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} re f`);
+  const box = (x, top, w, h, fill, stroke) => ops.push(`${fill} rg ${stroke} RG 0.7 w ${x.toFixed(2)} ${(H - top - h).toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} re B`);
+  const line = (x1, top, x2, rgb = LINE, lw = 0.7) => ops.push(`${rgb} RG ${lw} w ${x1} ${(H - top).toFixed(2)} m ${x2} ${(H - top).toFixed(2)} l S`);
+  const text = (s, x, top, { size = 10, font = 'F1', rgb = INK, align = 'left', tc = 0 } = {}) => {
+    const w = textWidth(s, size, font !== 'F1') + tc * clean(s).length, px = align === 'right' ? x - w : align === 'center' ? x - w / 2 : x;
+    ops.push(`BT ${rgb} rg /${font} ${size} Tf ${tc} Tc ${px.toFixed(2)} ${(H - top).toFixed(2)} Td (${esc(s)}) Tj ET`);
   };
 
-  // header band
-  rect(0, H - 96, W, 96, NAVY); rect(0, H - 100, W, 4, RED);
-  text(b.name, 40, H - 44, { size: 22, bold: true, rgb: '1 1 1' });
-  text(`${b.driverName}  |  ${b.phone}`, 40, H - 62, { size: 10, rgb: '0.85 0.88 0.95' });
-  text(b.address, 40, H - 76, { size: 10, rgb: '0.85 0.88 0.95' });
-  text('BILL', W - 40, H - 42, { size: 20, bold: true, rgb: '1 1 1', align: 'right' });
-  text(bill.number, W - 40, H - 60, { size: 11, rgb: '0.85 0.88 0.95', align: 'right' });
-  text(`Date: ${when(bill.created_at, { dateStyle: 'medium' })}`, W - 40, H - 76, { size: 10, rgb: '0.85 0.88 0.95', align: 'right' });
+  // ---- header band ----
+  const header = (compact) => {
+    const bh = compact ? 56 : 112;
+    rect(0, 0, W, bh, NAVY); rect(0, bh, W, 4, RED);
+    if (compact) {
+      text(`${first} ${rest.join(' ')}`.toUpperCase(), M, 34, { size: 14, font: 'F2', rgb: '1 1 1' });
+      text(`INVOICE ${bill.number}  (continued)`, R, 34, { size: 10, rgb: LIGHT, align: 'right' });
+      return bh + 30;
+    }
+    text(first, M, 44, { size: 22, font: 'F3', rgb: '1 0.42 0.45' });
+    text((rest.join(' ') || first).toUpperCase(), M, 76, { size: 30, font: 'F2', rgb: '1 1 1' });
+    text(String(b.tagline || '').replace(/\s*•.*$/, ''), M, 96, { size: 9.5, rgb: LIGHT });
+    text('INVOICE', R + 3, 52, { size: 9, rgb: LIGHT, align: 'right', tc: 3 });
+    text(bill.number, R, 76, { size: 19, font: 'F2', rgb: '1 1 1', align: 'right' });
+    return bh + 30;
+  };
+  addPage(); let y = header(false);
 
-  // customer + trip
-  let y = H - 140;
-  text('BILLED TO', 40, y, { size: 8, bold: true, rgb: GREY });
-  text(booking.name, 40, y - 16, { size: 13, bold: true });
-  text(booking.phone, 40, y - 31, { size: 10, rgb: GREY });
-  text('BOOKING', W - 40, y, { size: 8, bold: true, rgb: GREY, align: 'right' });
-  text(booking.ref, W - 40, y - 16, { size: 12, bold: true, align: 'right' });
-  const hasTrip = !(booking.pickup === '—' && booking.dropoff === '—');
-  y -= 58;
+  // ---- meta row ----
+  const meta = [['DATE', when(bill.created_at, { dateStyle: 'medium' })], ['BOOKING REF', booking.ref]];
+  meta.forEach(([k, v], i) => { text(k, M + i * 180, y, { size: 7.5, font: 'F2', rgb: GREY, tc: 1 }); text(v, M + i * 180, y + 15, { size: 12, font: 'F2' }); });
+  if (paid) { text('PAYMENT', M + 360, y, { size: 7.5, font: 'F2', rgb: GREY, tc: 1 }); rect(M + 360, y + 5, 96, 18, '0.863 0.988 0.906'); text(`PAID - ${bill.payment_method}`.toUpperCase(), M + 408, y + 17.5, { size: 8.5, font: 'F2', rgb: '0.086 0.396 0.204', align: 'center' }); }
+  y += 38; line(M, y, R); y += 18;
+
+  // ---- billed to / trip cards ----
+  const cw = (R - M - 14) / 2, lx = M + 12;
+  const fromL = wrap(booking.pickup, 10.5, cw - 64, 2), toL = wrap(booking.dropoff, 10.5, cw - 64, 2);
+  const tripH = hasTrip ? 40 + (fromL.length + toL.length) * 13 + 16 : 52, cardH = Math.max(72, tripH);
+  box(M, y, cw, cardH, SOFT, LINE); box(M + cw + 14, y, cw, cardH, SOFT, LINE);
+  text('BILLED TO', lx, y + 18, { size: 7.5, font: 'F2', rgb: GREY, tc: 1 });
+  text(fit(booking.name, 13, cw - 24, true), lx, y + 36, { size: 13, font: 'F2' }); text(booking.phone, lx, y + 52, { size: 10, rgb: GREY });
+  const rx = M + cw + 14 + 12;
   if (hasTrip) {
-    text('TRIP', 40, y, { size: 8, bold: true, rgb: GREY });
-    text(fit(`${booking.pickup}  ->  ${booking.dropoff}`, 11, W - 80, true), 40, y - 16, { size: 11, bold: true });
-    text(`Pickup: ${when(booking.pickup_at, { dateStyle: 'medium', timeStyle: 'short' })}  |  ${booking.passengers} passenger(s)`, 40, y - 31, { size: 10, rgb: GREY });
-    y -= 58;
-  }
+    text('TRIP', rx, y + 18, { size: 7.5, font: 'F2', rgb: GREY, tc: 1 });
+    let ty = y + 36;
+    text('FROM', rx, ty, { size: 7.5, font: 'F2', rgb: GREY }); fromL.forEach((l) => { text(l, rx + 40, ty, { size: 10.5, font: 'F2' }); ty += 13; });
+    text('TO', rx, ty, { size: 7.5, font: 'F2', rgb: GREY }); toL.forEach((l) => { text(l, rx + 40, ty, { size: 10.5, font: 'F2' }); ty += 13; });
+    text(`${when(booking.pickup_at, { dateStyle: 'medium', timeStyle: 'short' })}  |  ${booking.passengers} passenger${booking.passengers > 1 ? 's' : ''}`, rx, ty + 6, { size: 9, rgb: GREY });
+  } else { text('DATE', rx, y + 18, { size: 7.5, font: 'F2', rgb: GREY, tc: 1 }); text(when(booking.pickup_at, { dateStyle: 'medium' }), rx, y + 36, { size: 13, font: 'F2' }); }
+  y += cardH + 20;
 
-  // items table
-  const cQty = 370, cRate = 455, cAmt = W - 40;
-  rect(40, y - 6, W - 80, 24, '0.94 0.95 0.98');
-  text('DESCRIPTION', 48, y + 2, { size: 8, bold: true, rgb: GREY }); text('QTY', cQty, y + 2, { size: 8, bold: true, rgb: GREY, align: 'right' });
-  text('RATE', cRate, y + 2, { size: 8, bold: true, rgb: GREY, align: 'right' }); text('AMOUNT', cAmt - 8, y + 2, { size: 8, bold: true, rgb: GREY, align: 'right' });
-  y -= 26;
-  for (const it of bill.items) {
-    const dl = wrap(it.description, 10, 290);
-    dl.forEach((ln, i) => text(ln, 48, y - i * 12, { size: 10 }));
-    text(String(+it.qty), cQty, y, { size: 10, align: 'right' }); text(money(it.rate), cRate, y, { size: 10, align: 'right' }); text(money(it.amount), cAmt - 8, y, { size: 10, align: 'right' });
-    y -= (dl.length - 1) * 12; line(40, y - 7, W - 40, y - 7); y -= 22;
-  }
+  // ---- items table (flows onto further pages if needed) ----
+  const cQty = 372, cRate = 460, cAmt = R - 10, FOOT = 72, RESERVE = 190;
+  const tableHead = () => { rect(M, y, R - M, 24, NAVY); text('DESCRIPTION', M + 10, y + 15.5, { size: 7.5, font: 'F2', rgb: '1 1 1', tc: 1 }); text('QTY', cQty, y + 15.5, { size: 7.5, font: 'F2', rgb: '1 1 1', align: 'right', tc: 1 }); text('RATE', cRate, y + 15.5, { size: 7.5, font: 'F2', rgb: '1 1 1', align: 'right', tc: 1 }); text('AMOUNT', cAmt, y + 15.5, { size: 7.5, font: 'F2', rgb: '1 1 1', align: 'right', tc: 1 }); y += 24; };
+  tableHead();
+  bill.items.forEach((it, idx) => {
+    const dl = wrap(it.description, 10, 292, 3), rh = dl.length * 12 + 14;
+    if (y + rh > H - FOOT - 20) { addPage(); y = header(true); tableHead(); }
+    if (idx % 2 === 0) rect(M, y, R - M, rh, ZEBRA);
+    dl.forEach((ln, i) => text(ln, M + 10, y + 17 + i * 12, { size: 10 }));
+    text(String(+it.qty), cQty, y + 17, { size: 10, align: 'right' }); text(money(it.rate), cRate, y + 17, { size: 10, align: 'right' }); text(money(it.amount), cAmt, y + 17, { size: 10, font: 'F2', align: 'right' });
+    y += rh; line(M, y, R);
+  });
 
-  // totals
-  y -= 6;
-  text('Subtotal', cRate, y, { size: 10, rgb: GREY, align: 'right' }); text(money(bill.subtotal), cAmt - 8, y, { size: 10, align: 'right' }); y -= 18;
-  if (bill.tax_percent) { text(`Tax (${+bill.tax_percent}%)`, cRate, y, { size: 10, rgb: GREY, align: 'right' }); text(money(bill.tax), cAmt - 8, y, { size: 10, align: 'right' }); y -= 18; }
-  line(300, y + 10, W - 40, y + 10, INK, 1);
-  text('TOTAL', cRate, y - 8, { size: 13, bold: true, align: 'right' }); text(money(bill.total), cAmt - 8, y - 8, { size: 15, bold: true, rgb: RED, align: 'right' });
-  y -= 36;
-  if (bill.payment_method) text(`Payment: ${bill.payment_method}`, 40, y, { size: 10, rgb: GREY });
+  // ---- totals ----
+  if (y + RESERVE - FOOT > H - FOOT - 20) { addPage(); y = header(true); }
+  y += 14; const tx = 330;
+  text('Subtotal', tx, y + 4, { size: 10.5, rgb: GREY }); text(money(bill.subtotal), R - 4, y + 4, { size: 10.5, align: 'right' }); y += 20;
+  if (bill.tax_percent) { text(`Tax (${+bill.tax_percent}%)`, tx, y + 4, { size: 10.5, rgb: GREY }); text(money(bill.tax), R - 4, y + 4, { size: 10.5, align: 'right' }); y += 20; }
+  rect(tx - 8, y, R - tx + 8, 40, NAVY_D);
+  text('TOTAL', tx + 6, y + 24.5, { size: 8.5, font: 'F2', rgb: '1 1 1', tc: 2 }); text(money(bill.total), R - 12, y + 26, { size: 17, font: 'F2', rgb: '1 1 1', align: 'right' });
+  y += 66;
+  text('Thank you for riding with us!', W / 2, y, { size: 12, font: 'F2', rgb: NAVY, align: 'center' });
 
-  // footer
-  line(40, 70, W - 40, 70);
-  text('Thank you for riding with us!', W / 2, 52, { size: 11, bold: true, rgb: NAVY, align: 'center' });
-  text(`${b.name}  |  ${b.phone}${b.email ? '  |  ' + b.email : ''}`, W / 2, 38, { size: 9, rgb: GREY, align: 'center' });
+  // ---- footer on every page ----
+  pages.forEach((pg, i) => {
+    ops = pg;
+    rect(0, H - FOOT, W, FOOT, SOFT); line(0, H - FOOT, W, LINE, 0.7);
+    text(`${b.name}  |  ${b.driverName}`, W / 2, H - 44, { size: 9.5, font: 'F2', align: 'center' });
+    text(`${b.phone}${b.email ? '  |  ' + b.email : ''}`, W / 2, H - 31, { size: 8.5, rgb: GREY, align: 'center' });
+    text(`${b.address}${b.licence ? '  |  Vehicle ' + b.licence : ''}  |  Computer-generated bill${pages.length > 1 ? `  |  Page ${i + 1} of ${pages.length}` : ''}`, W / 2, H - 18, { size: 7.5, rgb: GREY, align: 'center' });
+  });
 
-  // assemble objects + xref
-  const content = Buffer.from(ops.join('\n'), 'latin1');
-  const objs = [
+  // ---- assemble PDF ----
+  const N = pages.length, objs = [
     '<< /Type /Catalog /Pages 2 0 R >>',
-    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>`,
+    `<< /Type /Pages /Kids [${pages.map((_, i) => `${6 + i * 2} 0 R`).join(' ')}] /Count ${N} >>`,
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>',
-    null,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-BoldOblique /Encoding /WinAnsiEncoding >>',
   ];
+  const streams = [];
+  pages.forEach((pg, i) => {
+    objs.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents ${7 + i * 2} 0 R >>`);
+    objs.push(null); streams.push(Buffer.from(pg.join('\n'), 'latin1'));
+  });
   const parts = [Buffer.from('%PDF-1.4\n%\xe2\xe3\xcf\xd3\n', 'latin1')], offsets = [];
-  let pos = parts[0].length;
+  let pos = parts[0].length, si = 0;
   objs.forEach((o, i) => {
     offsets.push(pos);
-    const body = o === null ? Buffer.concat([Buffer.from(`<< /Length ${content.length} >>\nstream\n`), content, Buffer.from('\nendstream')]) : Buffer.from(o);
+    const body = o === null ? (() => { const s = streams[si++]; return Buffer.concat([Buffer.from(`<< /Length ${s.length} >>\nstream\n`), s, Buffer.from('\nendstream')]); })() : Buffer.from(o);
     const chunk = Buffer.concat([Buffer.from(`${i + 1} 0 obj\n`), body, Buffer.from('\nendobj\n')]);
     parts.push(chunk); pos += chunk.length;
   });

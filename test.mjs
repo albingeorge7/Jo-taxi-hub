@@ -184,4 +184,13 @@ assert.equal(vs2.range.totals.visits, 2 + 5, 'every session is a visit');
 assert.equal(vs2.range.totals.visitors, 1 + 3 + 1, 'distinct people: earlier fallback visitor + 3 ids + 1 fallback');
 assert.equal(vs2.totals.visitorsToday, vs2.range.totals.visitors);
 assert.ok(vs2.range.daily.reduce((a, d) => a + d.visitors, 0) >= vs2.range.totals.visitors - 0, 'daily buckets present');
+// elegant bill: web page has the invoice layout; long bills continue on a second PDF page
+const many = Array.from({ length: 20 }, (_, i) => ({ description: `Leg ${i + 1} · ${i + 1} Nov 2026: Edappally Junction, Kochi → Cochin International Airport, Nedumbassery (45 km @ ₹14/km)`, qty: 45, rate: 14 }));
+const big = await j('/api/driver/bills', 'POST', { customer: { name: 'Many Legs', pickup: 'Edappally', dropoff: 'Airport', phone: '9847011188' }, items: many }, ck2);
+assert.equal(big.status, 201);
+const bigPdf = await (async () => Buffer.from(await (await fetch(big.data.link.replace(/^https?:\/\/[^/]+/, base) + '.pdf')).arrayBuffer()).toString('latin1'))();
+assert.ok(bigPdf.includes('/Count 2'), 'a 20-line bill continues on a second PDF page');
+assert.ok(bigPdf.includes('(continued)'), 'continuation pages carry a compact header');
+const bigHtml = await (await fetch(big.data.link.replace(/^https?:\/\/[^/]+/, base))).text();
+assert.ok(bigHtml.includes('INVOICE') && bigHtml.includes('<i>From</i>') && bigHtml.includes('<i>To</i>') && bigHtml.includes('TOTAL'), 'invoice layout');
 console.log('All tests passed'); process.exit(0);
