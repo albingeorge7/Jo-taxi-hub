@@ -178,7 +178,7 @@ const defaultRoute = () => {
 };
 const reverseRoute = (r) => { const p = r.split(ARROW); return p.length === 2 && p[0] && p[1] ? `${p[1].trim()} → ${p[0].trim()}` : ''; };
 function legRow(route = '', km = '', amt = '', date = '') {
-  return `<div class="leg"><div class="leg-h"><span>Leg <span class="ln"></span></span><button type="button" class="btn sm sec rmleg">${ic('x')}</button></div>
+  return `<div class="leg"><div class="leg-h"><span>Leg <span class="ln"></span><span class="leg-route"></span></span><button type="button" class="btn sm sec rmleg">${ic('x')}</button></div>
     <input class="l-route" placeholder="From → To" value="${esc(route)}">
     <label style="margin-top:8px">Date <span class="muted">(optional &mdash; if different from the booking)</span><input class="l-date" type="date" max="${new Date().toLocaleDateString('en-CA')}" value="${date}"></label>
     <div class="row"><label class="km-only">Distance (km)<input class="l-km" type="number" min="0" step="any" inputmode="decimal" value="${km}"></label>
@@ -186,8 +186,13 @@ function legRow(route = '', km = '', amt = '', date = '') {
 }
 function renumberLegs() {
   const legs = document.querySelectorAll('#legs .leg');
-  legs.forEach((l, i) => { l.querySelector('.ln').textContent = i + 1; l.querySelector('.rmleg').classList.toggle('hidden', legs.length === 1); });
-  const first = $('#legs .l-route'); if (first) first.placeholder = defaultRoute() || 'From → To';
+  legs.forEach((l, i) => {
+    l.querySelector('.ln').textContent = i + 1;
+    l.querySelector('.rmleg').classList.toggle('hidden', i === 0);                        // leg 1 is the booking's pickup → drop
+    l.querySelector('.leg-route').textContent = i === 0 ? ` · ${defaultRoute() || 'Pickup → Drop'}` : '';
+    l.querySelector('.l-route').classList.toggle('hidden', i === 0);
+    l.querySelector('.l-route').placeholder = 'From → To (e.g. Munnar → Aluva)';
+  });
 }
 function addLeg(route, km, amt, date) { $('#legs').insertAdjacentHTML('beforeend', legRow(route, km, amt, date)); renumberLegs(); calc(); }
 function addReturnLeg() {
