@@ -8,7 +8,7 @@ DRIVER_PASSWORD=choose-a-password DRIVER_NAME="Ravi Kumar" DRIVER_PHONE="+91 98x
 DRIVER_ADDRESS="12 Main Rd, Kochi" npm start
 ```
 - Customer site: http://localhost:3000 (the Pi script uses port 3100) — driver details, booking form, booking-status check.
-- Driver dashboard: http://localhost:3000 (the Pi script uses port 3100)/driver (default username `jojojose`; set the password with `DRIVER_PASSWORD` — **never use the default `driver123`**).
+- Driver dashboard: http://localhost:3000/driver (the Pi script uses port 3100). Default username `jojojose`; set the password with `DRIVER_PASSWORD` — never use the default `driver123`.
 
 ## Driver dashboard
 - **Requests** – new bookings appear instantly with sound, vibration and a browser notification (tap "Enable sound & notifications" once). Accept / reject.
