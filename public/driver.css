@@ -52,3 +52,8 @@ dialog h2{display:flex;gap:10px;align-items:center;margin-top:0}dialog h2 .ic{co
 .billtotal{font-size:20px;font-weight:800;text-align:right;color:var(--navy);margin:2px 0 6px}
 dialog .row{display:grid;gap:12px;grid-template-columns:1fr 1fr}@media(max-width:480px){dialog .row{grid-template-columns:1fr}}
 .tag{background:#eef1f7;color:var(--navy);border-radius:6px;padding:0 7px;font-size:12px;font-weight:600}
+
+.rangebar{margin-bottom:14px;display:flex;flex-direction:column;gap:12px}
+.chip.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+.rangebar .custom{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+.rangebar .custom label{margin:0;flex:1;min-width:130px}.rangebar .custom input{margin-top:4px}

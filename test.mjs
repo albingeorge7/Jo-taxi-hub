@@ -61,7 +61,16 @@ assert.equal((await j('/api/driver/bills', 'POST', { customer: { name: 'x', pick
 assert.equal((await j('/api/driver/bookings', 'GET', null, cookie)).data.length, 2, 'failed bills leave no orphan bookings');
 
 const st = (await j('/api/driver/stats', 'GET', null, cookie)).data;
-assert.equal(st.totals.completed, 2); assert.equal(st.totals.revenueAll, 3699.5);
+assert.equal(st.range.preset, '30d'); assert.equal(st.range.totals.completed, 2); assert.equal(st.range.totals.revenue, 3699.5);
+const sj = (q) => j('/api/driver/stats?' + q, 'GET', null, cookie);
+assert.equal((await sj('preset=all')).data.range.totals.revenue, 3699.5);
+assert.equal((await sj('preset=today')).data.range.totals.completed, 2, 'rides billed today fall in today');
+const old = (await sj('preset=custom&from=2020-01-01&to=2020-01-31')).data; assert.equal(old.range.totals.revenue, 0); assert.equal(old.range.days, 31);
+assert.equal((await sj('preset=custom&from=2020-02-01&to=2020-01-01')).status, 400, 'reversed range rejected');
+assert.equal((await sj('preset=custom&from=nope&to=2020-01-01')).status, 400);
+assert.equal((await sj('preset=custom&from=1990-01-01&to=2026-01-01')).status, 400, 'range capped');
+const lm = (await sj('preset=lastmonth')).data.range; assert.ok(lm.from.endsWith('-01') && lm.to > lm.from);
+assert.equal((await sj('preset=custom&from=2020-01-01&to=2020-12-31')).data.range.monthly, true, 'long ranges bucket by month');
 assert.equal((await fetch(base + '/../etc/passwd')).status === 200, false);
 assert.equal((await fetch(base + '/%2e%2e/server.js')).status, 404);
 for (const p of ['/', '/driver', '/app.js', '/driver.js']) assert.equal((await fetch(base + p)).status, 200, p);

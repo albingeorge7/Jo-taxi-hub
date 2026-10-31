@@ -254,7 +254,7 @@ async function api(req, res, url) {
     return send(res, 200, db.prepare('SELECT * FROM bookings WHERE id=?').get(id));
   }
 
-  if (m === 'GET' && pathname === '/api/driver/stats') return send(res, 200, stats());
+  if (m === 'GET' && pathname === '/api/driver/stats') return send(res, 200, stats(Object.fromEntries(url.searchParams)));
 
   if (m === 'POST' && pathname === '/api/driver/bills') {
     const b = await readJson(req);
@@ -310,47 +310,80 @@ async function api(req, res, url) {
 }
 
 // ---------- analytics ----------
-function stats() {
+const DAY = 86400e3, ymd = (ms) => new Date(ms).toISOString().slice(0, 10), dayMs = (s) => Date.parse(s + 'T00:00:00Z');
+const validDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s || '') && ymd(dayMs(s)) === s;
+
+function resolveRange(q, today, earliest) {
+  let from, to = today;
+  switch (q.preset) {
+    case 'today': from = today; break;
+    case '7d': from = ymd(dayMs(today) - 6 * DAY); break;
+    case 'month': from = today.slice(0, 7) + '-01'; break;
+    case 'lastmonth': to = ymd(dayMs(today.slice(0, 7) + '-01') - DAY); from = to.slice(0, 7) + '-01'; break;
+    case 'all': from = earliest || today; break;
+    case 'custom':
+      if (!validDate(q.from) || !validDate(q.to)) throw new HttpError(400, 'Choose a valid start and end date');
+      from = q.from; to = q.to; break;
+    default: from = ymd(dayMs(today) - 29 * DAY); q = { ...q, preset: '30d' };
+  }
+  if (from > to) throw new HttpError(400, 'The start date must be on or before the end date');
+  if ((dayMs(to) - dayMs(from)) / DAY > 3660) throw new HttpError(400, 'Please choose a range of 10 years or less');
+  return { preset: q.preset || '30d', from, to };
+}
+
+function stats(query = {}) {
   const tz = config.timezone;
   const dayKey = (d) => new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(d); // YYYY-MM-DD
-  const all = db.prepare('SELECT * FROM bookings').all();
-  const now = new Date();
-  const today = dayKey(now);
-  const monthPrefix = today.slice(0, 7);
-  const done = all.filter((b) => b.status === 'completed');
+  const hourFmt = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', hour12: false });
+  const all = db.prepare('SELECT * FROM bookings').all().map((b) => ({ ...b, day: dayKey(new Date(b.pickup_at)), created: dayKey(new Date(b.created_at)) }));
+  const today = dayKey(new Date());
   const revenue = (list) => round2(list.reduce((s, b) => s + (b.fare || 0), 0));
+  const earliest = all.reduce((m, b) => (!m || b.day < m ? b.day : m), '');
+  const range = resolveRange(query, today, earliest);
 
-  const daily = {};
-  for (let i = 29; i >= 0; i--) daily[dayKey(new Date(now.getTime() - i * 86400e3))] = { rides: 0, revenue: 0, bookings: 0 };
+  // live numbers for the Requests tab (not affected by the chosen range)
+  const done = all.filter((b) => b.status === 'completed');
+  const live = {
+    pending: all.filter((b) => b.status === 'pending').length,
+    todayRides: all.filter((b) => b.day === today && ['confirmed', 'completed'].includes(b.status)).length,
+    revenueToday: revenue(done.filter((b) => b.day === today)),
+  };
+
+  // numbers for the selected date range (by ride date; request volume by the date it was made)
+  const inRange = all.filter((b) => b.day >= range.from && b.day <= range.to);
+  const rdone = inRange.filter((b) => b.status === 'completed');
+  const byStatus = Object.fromEntries(STATUSES.map((s) => [s, inRange.filter((b) => b.status === s).length]));
+  const days = Math.round((dayMs(range.to) - dayMs(range.from)) / DAY) + 1;
+  const monthly = days > 92; // long ranges are shown one bar per month
+  const bucket = (day) => (monthly ? day.slice(0, 7) : day);
+  const series = {};
+  for (let i = 0; i < days; i++) series[bucket(ymd(dayMs(range.from) + i * DAY))] ||= { rides: 0, revenue: 0, bookings: 0 };
   for (const b of all) {
-    const created = dayKey(new Date(b.created_at)); if (daily[created]) daily[created].bookings++;
-    if (b.status === 'completed') { const k = dayKey(new Date(b.pickup_at)); if (daily[k]) { daily[k].rides++; daily[k].revenue = round2(daily[k].revenue + (b.fare || 0)); } }
+    if (b.created >= range.from && b.created <= range.to) series[bucket(b.created)].bookings++;
+    if (b.status === 'completed' && b.day >= range.from && b.day <= range.to) { const e = series[bucket(b.day)]; e.rides++; e.revenue = round2(e.revenue + (b.fare || 0)); }
   }
-  const byStatus = Object.fromEntries(STATUSES.map((s) => [s, all.filter((b) => b.status === s).length]));
   const hours = Array(24).fill(0);
-  for (const b of all) if (b.status !== 'cancelled' && b.status !== 'rejected') {
-    hours[Number(new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', hour12: false }).format(new Date(b.pickup_at))) % 24]++;
-  }
+  for (const b of inRange) if (b.status !== 'cancelled' && b.status !== 'rejected') hours[Number(hourFmt.format(new Date(b.pickup_at))) % 24]++;
   const top = (key) => {
-    const c = {}; for (const b of all) { if (b[key] === '—') continue; const k = b[key].toLowerCase(); c[k] = c[k] || { label: b[key], n: 0 }; c[k].n++; }
+    const c = {}; for (const b of inRange) { if (b[key] === '—') continue; const k = b[key].toLowerCase(); c[k] = c[k] || { label: b[key], n: 0 }; c[k].n++; }
     return Object.values(c).sort((a, b) => b.n - a.n).slice(0, 5);
   };
   const decided = byStatus.completed + byStatus.cancelled + byStatus.rejected;
-  const customers = {}; for (const b of done) customers[b.phone] = (customers[b.phone] || 0) + 1;
+  const customers = {}; for (const b of rdone) customers[b.phone] = (customers[b.phone] || 0) + 1;
   return {
-    totals: {
-      bookings: all.length, pending: byStatus.pending, confirmed: byStatus.confirmed, completed: done.length,
-      todayRides: all.filter((b) => dayKey(new Date(b.pickup_at)) === today && ['confirmed', 'completed'].includes(b.status)).length,
-      revenueAll: revenue(done),
-      revenueMonth: revenue(done.filter((b) => dayKey(new Date(b.pickup_at)).startsWith(monthPrefix))),
-      revenueToday: revenue(done.filter((b) => dayKey(new Date(b.pickup_at)) === today)),
-      avgFare: done.length ? round2(revenue(done) / done.length) : 0,
-      completionRate: decided ? Math.round(byStatus.completed / decided * 100) : null,
-      repeatCustomers: Object.values(customers).filter((n) => n > 1).length,
+    currency: config.currency, today,
+    totals: live,
+    range: {
+      ...range, days, monthly,
+      totals: {
+        bookings: inRange.length, completed: rdone.length, revenue: revenue(rdone),
+        avgFare: rdone.length ? round2(revenue(rdone) / rdone.length) : 0,
+        completionRate: decided ? Math.round(byStatus.completed / decided * 100) : null,
+        repeatCustomers: Object.values(customers).filter((n) => n > 1).length,
+      },
+      daily: Object.entries(series).map(([date, v]) => ({ date, ...v })),
+      byStatus, hours, topPickups: top('pickup'), topDrops: top('dropoff'),
     },
-    currency: config.currency,
-    daily: Object.entries(daily).map(([date, v]) => ({ date, ...v })),
-    byStatus, hours, topPickups: top('pickup'), topDrops: top('dropoff'),
   };
 }
 

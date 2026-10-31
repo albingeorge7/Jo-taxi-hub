@@ -13,7 +13,7 @@ DRIVER_ADDRESS="12 Main Rd, Kochi" npm start
 ## Driver dashboard
 - **Requests** – new bookings appear instantly with sound, vibration and a browser notification (tap "Enable sound & notifications" once). Accept / reject.
 - **Schedule** – upcoming rides grouped by day, with warnings for clashing rides (within 90 min).
-- **Analytics** – revenue (today/month/total), average fare, completion rate, repeat customers, 30-day charts, busiest hours, top routes.
+- **Analytics** – pick Today, 7 days, 30 days, This month, Last month, All time or any custom from–to dates. Shows revenue, rides, bookings, average fare, completion rate, repeat customers, revenue and request charts (per day, or per month for long ranges), busiest hours and top routes.
 - **Bills** – "Complete & bill" builds an itemised bill (base fare, km, tolls…, tax %). It's saved at a private link `/bill/<token>` (print / save as PDF). A "Send bill on WhatsApp" button opens WhatsApp with the customer's number and the bill link ready to send. The red floating **New bill** button creates a bill for rides not booked on the site. Fares can be *per km + extras (toll, parking…)* or a *fixed amount*.
 
 ## Location picker

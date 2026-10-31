@@ -40,8 +40,10 @@ $('#tabs').addEventListener('click', (e) => {
   render();
 });
 
+let range = { preset: '30d' };
+const statsUrl = () => '/api/driver/stats?' + new URLSearchParams(range.preset === 'custom' ? range : { preset: range.preset });
 async function refresh() {
-  [bookings, stats] = await Promise.all([api('/api/driver/bookings'), api('/api/driver/stats')]);
+  [bookings, stats] = await Promise.all([api('/api/driver/bookings'), api(statsUrl())]);
   render();
 }
 function render() {
@@ -112,21 +114,41 @@ function renderHistory() {
 }
 
 // ---------- analytics ----------
+const PRESETS = [['today', 'Today'], ['7d', 'Last 7 days'], ['30d', 'Last 30 days'], ['month', 'This month'], ['lastmonth', 'Last month'], ['all', 'All time']];
+const prettyDate = (s) => new Date(s + 'T00:00:00').toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
 function renderAnalytics() {
-  const t = stats.totals, d = stats.daily;
+  const r = stats.range, t = r.totals, d = r.daily, per = r.monthly ? 'per month' : 'per day';
   const maxRev = Math.max(1, ...d.map((x) => x.revenue)), maxBk = Math.max(1, ...d.map((x) => x.bookings));
-  const hmax = Math.max(1, ...stats.hours);
-  const list = (arr) => arr.map((x) => `<div class="hbar"><b>${x.n}×</b><span>${esc(x.label)}</span></div>`).join('') || '<span class="muted">No data yet</span>';
+  const hmax = Math.max(1, ...r.hours);
+  const list = (arr) => arr.map((x) => `<div class="hbar"><b>${x.n}×</b><span>${esc(x.label)}</span></div>`).join('') || '<span class="muted">No data in this period</span>';
   const chart = (icon, title, body, l1, l2) => `<div class="card chart" style="margin-bottom:12px"><h3>${ic(icon)}${title}</h3>${body}<div class="legend"><span>${l1}</span><span>${l2}</span></div></div>`;
+  const keep = $('#rFrom') ? { from: $('#rFrom').value, to: $('#rTo').value } : null;
   $('#tab-analytics').innerHTML = `<h2 class="sec">${ic('chart')}Analytics</h2>
-  <div class="stats">${statTile('rupee', money(t.revenueMonth), 'Revenue this month')}${statTile('trend', money(t.revenueAll), 'Total revenue', 'g')}${statTile('car', t.completed, 'Completed rides', 'b')}
-    ${statTile('receipt', money(t.avgFare), 'Average fare')}${statTile('check', (t.completionRate ?? '–') + (t.completionRate != null ? '%' : ''), 'Completion rate', 'g')}${statTile('users', t.repeatCustomers, 'Repeat customers', 'b')}</div>
-  ${chart('rupee', 'Revenue – last 30 days', `<div class="bars">${d.map((x) => `<div title="${x.date}: ${money(x.revenue)}" style="height:${x.revenue / maxRev * 100}%"></div>`).join('')}</div>`, d[0].date, d[d.length - 1].date)}
-  ${chart('bell', 'New booking requests per day', `<div class="bars">${d.map((x) => `<div class="b2" title="${x.date}: ${x.bookings}" style="height:${x.bookings / maxBk * 100}%"></div>`).join('')}</div>`, d[0].date, d[d.length - 1].date)}
-  ${chart('clock', 'Busiest pickup hours', `<div class="bars">${stats.hours.map((n, h) => `<div title="${h}:00 – ${n} rides" style="height:${n / hmax * 100}%"></div>`).join('')}</div>`, '12am', '11pm')}
-  <div class="grid"><div class="card chart"><h3>${ic('pin')}Top pickup spots</h3>${list(stats.topPickups)}</div><div class="card chart"><h3>${ic('route')}Top destinations</h3>${list(stats.topDrops)}</div>
-  <div class="card chart"><h3>${ic('list')}Ride status</h3>${Object.entries(stats.byStatus).map(([s, n]) => `<div class="hbar"><span class="badge s-${s}" style="min-width:92px;text-align:center">${s}</span> <b>${n}</b></div>`).join('')}</div></div>`;
+  <div class="card rangebar">
+    <div class="chips">${PRESETS.map(([k, l]) => `<button class="chip ${r.preset === k ? 'on' : ''}" data-preset="${k}">${l}</button>`).join('')}</div>
+    <div class="custom"><label>From<input type="date" id="rFrom" value="${keep?.from || r.from}" max="${stats.today}"></label><label>To<input type="date" id="rTo" value="${keep?.to || r.to}" max="${stats.today}"></label><button class="btn sm navy" id="rApply">${ic('check')}Apply</button></div>
+    <div class="muted" style="font-size:13px">${ic('calendar')} Showing <b>${prettyDate(r.from)}</b> to <b>${prettyDate(r.to)}</b> (${r.days} day${r.days > 1 ? 's' : ''}${r.preset === 'custom' ? ', custom' : ''}) &middot; rides counted by pickup date</div>
+  </div>
+  <div class="stats">${statTile('rupee', money(t.revenue), 'Revenue')}${statTile('car', t.completed, 'Completed rides', 'b')}${statTile('list', t.bookings, 'Total bookings', 'b')}
+    ${statTile('receipt', money(t.avgFare), 'Average fare')}${statTile('check', (t.completionRate ?? '–') + (t.completionRate != null ? '%' : ''), 'Completion rate', 'g')}${statTile('users', t.repeatCustomers, 'Repeat customers', 'g')}</div>
+  ${chart('rupee', `Revenue ${per}`, `<div class="bars">${d.map((x) => `<div title="${x.date}: ${money(x.revenue)}" style="height:${x.revenue / maxRev * 100}%"></div>`).join('')}</div>`, d[0].date, d[d.length - 1].date)}
+  ${chart('bell', `New booking requests ${per}`, `<div class="bars">${d.map((x) => `<div class="b2" title="${x.date}: ${x.bookings}" style="height:${x.bookings / maxBk * 100}%"></div>`).join('')}</div>`, d[0].date, d[d.length - 1].date)}
+  ${chart('clock', 'Busiest pickup hours', `<div class="bars">${r.hours.map((n, h) => `<div title="${h}:00 – ${n} rides" style="height:${n / hmax * 100}%"></div>`).join('')}</div>`, '12am', '11pm')}
+  <div class="grid"><div class="card chart"><h3>${ic('pin')}Top pickup spots</h3>${list(r.topPickups)}</div><div class="card chart"><h3>${ic('route')}Top destinations</h3>${list(r.topDrops)}</div>
+  <div class="card chart"><h3>${ic('list')}Ride status</h3>${Object.entries(r.byStatus).map(([s, n]) => `<div class="hbar"><span class="badge s-${s}" style="min-width:92px;text-align:center">${s}</span> <b>${n}</b></div>`).join('')}</div></div>`;
 }
+async function setRange(next) {
+  const prev = range; range = next;
+  try { stats = await api(statsUrl()); render(); } catch (e) { range = prev; toast(esc(e.message)); }
+}
+document.addEventListener('click', (e) => {
+  const p = e.target.closest('[data-preset]'); if (p) return setRange({ preset: p.dataset.preset });
+  if (e.target.closest('#rApply')) {
+    const from = $('#rFrom').value, to = $('#rTo').value;
+    if (!from || !to) return toast('Pick both a start and an end date.');
+    setRange({ preset: 'custom', from, to });
+  }
+});
 
 // ---------- actions ----------
 document.addEventListener('click', async (e) => {
