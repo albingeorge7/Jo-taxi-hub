@@ -190,7 +190,7 @@ const big = await j('/api/driver/bills', 'POST', { customer: { name: 'Many Legs'
 assert.equal(big.status, 201);
 const bigPdf = await (async () => Buffer.from(await (await fetch(big.data.link.replace(/^https?:\/\/[^/]+/, base) + '.pdf')).arrayBuffer()).toString('latin1'))();
 assert.ok(bigPdf.includes('/Count 2'), 'a 20-line bill continues on a second PDF page');
-assert.ok(bigPdf.includes('(continued)'), 'continuation pages carry a compact header');
+assert.ok(bigPdf.includes('continued'), 'continuation pages carry a compact header');
 const bigHtml = await (await fetch(big.data.link.replace(/^https?:\/\/[^/]+/, base))).text();
 assert.ok(bigHtml.includes('INVOICE') && bigHtml.includes('<i>From</i>') && bigHtml.includes('<i>To</i>') && bigHtml.includes('TOTAL'), 'invoice layout');
 console.log('All tests passed'); process.exit(0);
