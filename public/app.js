@@ -60,9 +60,11 @@ $('#bookForm').addEventListener('submit', async (e) => {
   btn.disabled = true; btn.textContent = 'Sending…';
   try {
     const r = await post('/api/bookings', { ...v, pickup_at: new Date(v.when).toISOString() });
+    document.querySelectorAll('[data-pinned]').forEach((x) => x.classList.add('hidden'));
+    f.querySelectorAll('input[type=hidden]').forEach((h) => (h.value = ''));  // reset() does not clear hidden fields
     show(msg, 'ok', `${ic('check')}<div>Booking request sent!<br>Your reference: <strong>${esc(r.ref)}</strong><br>The driver will confirm shortly. Save this reference to check status.</div>`);
     $('#trackForm [name=ref]').value = r.ref; $('#trackForm [name=phone]').value = v.phone;
-    f.reset(); whenInput.value = whenInput.min;
+    f.reset(); f.querySelectorAll('input[type=hidden]').forEach((h) => (h.value = '')); whenInput.value = whenInput.min;
   } catch (err) { show(msg, 'err', ic('x') + '<div>' + esc(err.message) + '</div>'); }
   btn.disabled = false; btn.textContent = 'Request booking';
 });
@@ -75,3 +77,71 @@ $('#trackForm').addEventListener('submit', async (e) => {
     show(msg, 'ok', `${ic('check')}<div><strong>${esc(r.ref)}</strong> <span class="badge s-${r.status}">${r.status}</span><br>${esc(r.pickup)} → ${esc(r.dropoff)}<br>${fmt(r.pickup_at)}${r.fare ? `<br>Fare: ${info.currency}${r.fare}` : ''}</div>`);
   } catch (err) { show(msg, 'err', ic('x') + '<div>' + esc(err.message) + '</div>'); }
 });
+
+// ---------- location picker (OpenStreetMap + Leaflet, loaded on first use) ----------
+const bookForm = $('#bookForm');
+let leafletReady, map, marker, picking, picked;
+const loadLeaflet = () => leafletReady ||= new Promise((ok, fail) => {
+  const s = document.createElement('script'); s.src = '/vendor/leaflet/leaflet.js';
+  s.onload = () => { L.Icon.Default.imagePath = '/vendor/leaflet/images/'; ok(); }; s.onerror = fail; document.head.append(s);
+});
+const shortName = (n) => n.split(',').slice(0, 3).join(',').trim();
+async function nominatim(path) {
+  const r = await fetch('https://nominatim.openstreetmap.org/' + path + '&format=jsonv2&accept-language=en');
+  if (!r.ok) throw new Error('Map search unavailable');
+  return r.json();
+}
+function setPin(lat, lng, label) {
+  picked = { lat, lng, label };
+  if (!marker) marker = L.marker([lat, lng]).addTo(map); else marker.setLatLng([lat, lng]);
+  map.setView([lat, lng], Math.max(map.getZoom(), 16));
+  $('#mapPicked').textContent = label || `${lat.toFixed(5)}, ${lng.toFixed(5)}`; $('#mapOk').disabled = false;
+}
+async function pinFromMap(lat, lng) {
+  setPin(lat, lng, 'Finding address…');
+  try { const d = await nominatim(`reverse?lat=${lat}&lon=${lng}`); picked.label = d.display_name ? shortName(d.display_name) : `${lat.toFixed(5)}, ${lng.toFixed(5)}`; }
+  catch { picked.label = `${lat.toFixed(5)}, ${lng.toFixed(5)}`; }
+  $('#mapPicked').textContent = picked.label;
+}
+async function openPicker(which) {
+  picking = which; picked = null;
+  $('#mapTitle').textContent = which === 'pickup' ? 'Choose pickup location' : 'Choose drop location';
+  $('#mapOk').disabled = true; $('#mapPicked').textContent = 'Tap the map to drop a pin, or search above.'; $('#mapResults').classList.add('hidden'); $('#mapQ').value = '';
+  $('#mapDlg').showModal();
+  try { await loadLeaflet(); } catch { $('#mapPicked').textContent = 'Could not load the map. Please type the address instead.'; return; }
+  if (!map) {
+    map = L.map('map').setView(info?.mapCenter || [9.9312, 76.2673], 12);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map);
+    map.on('click', (e) => pinFromMap(e.latlng.lat, e.latlng.lng));
+  }
+  if (marker) { marker.remove(); marker = null; }
+  const lat = Number(bookForm[which + '_lat'].value), lng = Number(bookForm[which + '_lng'].value);
+  setTimeout(() => { map.invalidateSize(); if (lat && lng) { setPin(lat, lng, bookForm[which === 'pickup' ? 'pickup' : 'dropoff'].value); } }, 50);
+}
+document.addEventListener('click', (e) => { const b = e.target.closest('[data-pick]'); if (b) openPicker(b.dataset.pick); });
+$('#mapClose').onclick = () => $('#mapDlg').close();
+$('#mapOk').onclick = () => {
+  if (!picked) return;
+  const field = bookForm[picking === 'pickup' ? 'pickup' : 'dropoff'];
+  field.value = picked.label; bookForm[picking + '_lat'].value = picked.lat; bookForm[picking + '_lng'].value = picked.lng;
+  document.querySelector(`[data-pinned=${picking}]`).classList.remove('hidden'); $('#mapDlg').close();
+};
+// typing by hand after pinning clears the pin so text and coordinates never disagree
+document.querySelectorAll('input[data-loc]').forEach((inp) => inp.addEventListener('input', () => {
+  const w = inp.dataset.loc; bookForm[w + '_lat'].value = ''; bookForm[w + '_lng'].value = ''; document.querySelector(`[data-pinned=${w}]`).classList.add('hidden');
+}));
+$('#mapSearch').addEventListener('submit', async (e) => {
+  e.preventDefault(); const q = $('#mapQ').value.trim(), ul = $('#mapResults'); if (!q) return;
+  ul.innerHTML = '<li>Searching…</li>'; ul.classList.remove('hidden');
+  try {
+    const res = await nominatim(`search?q=${encodeURIComponent(q)}&limit=6&countrycodes=${info?.countryIso || 'in'}`);
+    ul.innerHTML = '';
+    if (!res.length) ul.innerHTML = '<li>No places found. Try a nearby landmark or drop a pin on the map.</li>';
+    res.forEach((r) => { const li = document.createElement('li'); li.textContent = shortName(r.display_name); li.onclick = () => { ul.classList.add('hidden'); setPin(+r.lat, +r.lon, shortName(r.display_name)); }; ul.append(li); });
+  } catch (err) { ul.innerHTML = `<li>${esc(err.message)}. You can still tap the map.</li>`; }
+});
+$('#mapLocate').onclick = () => {
+  if (!navigator.geolocation) return ($('#mapPicked').textContent = 'Location is not available on this device.');
+  $('#mapPicked').textContent = 'Getting your location…';
+  navigator.geolocation.getCurrentPosition((p) => pinFromMap(p.coords.latitude, p.coords.longitude), () => ($('#mapPicked').textContent = 'Could not get your location. Please allow location access, or tap the map.'), { enableHighAccuracy: true, timeout: 10000 });
+};

@@ -66,7 +66,18 @@ function rideCard(b, { actions = true } = {}) {
   <div class="who"><span>${ic('user')}${esc(b.name)}</span><a href="${tel}">${ic('phone')}${esc(b.phone)}</a>${b.email ? `<span>${ic('mail')}${esc(b.email)}</span>` : ''}</div>
   ${b.notes ? `<div class="muted">${ic('note')} ${esc(b.notes)}</div>` : ''}
   ${conflictOf(b)}
+  ${mapButtons(b)}
   <div class="actions">${a.join('')}<a class="btn sm sec" href="${tel}">${ic('phone')}Call</a></div></div>`;
+}
+// Open the pin the customer chose (or the typed address) in Google Maps / the phone's maps app.
+function mapButtons(b) {
+  if (!['pending', 'confirmed'].includes(b.status) || b.pickup === '—') return '';
+  const place = (t, la, lo) => (la != null && lo != null ? `${la},${lo}` : t);
+  const p = place(b.pickup, b.pickup_lat, b.pickup_lng), d = place(b.dropoff, b.drop_lat, b.drop_lng), e = encodeURIComponent;
+  const pin = (la) => (la != null ? ' <span class="tag">pinned</span>' : '');
+  return `<div class="actions maps"><a class="btn sm sec" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${e(p)}">${ic('pin')}Pickup${pin(b.pickup_lat)}</a>
+    <a class="btn sm sec" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${e(d)}">${ic('route')}Drop${pin(b.drop_lat)}</a>
+    <a class="btn sm navy" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&origin=${e(p)}&destination=${e(d)}&travelmode=driving">${ic('car')}Route</a></div>`;
 }
 function conflictOf(b) {
   if (!['pending', 'confirmed'].includes(b.status)) return '';

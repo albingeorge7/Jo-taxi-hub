@@ -41,6 +41,9 @@ CREATE INDEX IF NOT EXISTS idx_bookings_pickup ON bookings(pickup_at);
 CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
 `);
 
+for (const col of ['pickup_lat', 'pickup_lng', 'drop_lat', 'drop_lng']) {
+  try { db.exec(`ALTER TABLE bookings ADD COLUMN ${col} REAL`); } catch { /* column exists */ }
+}
 try { db.exec("ALTER TABLE bookings ADD COLUMN source TEXT NOT NULL DEFAULT 'web'"); } catch { /* column exists */ }
 
 const STATUSES = ['pending', 'confirmed', 'completed', 'cancelled', 'rejected'];
@@ -152,7 +155,7 @@ const loadBill = (row) => row && { ...row, items: JSON.parse(row.items) };
 async function api(req, res, url) {
   const { pathname } = url; const m = req.method;
 
-  if (m === 'GET' && pathname === '/api/info') return send(res, 200, { ...config.business, currency: config.currency });
+  if (m === 'GET' && pathname === '/api/info') return send(res, 200, { ...config.business, currency: config.currency, mapCenter: config.mapCenter, countryIso: config.countryIso });
 
   if (m === 'POST' && pathname === '/api/bookings') {
     rateLimit(req, 'book', 8, 3600e3);
@@ -168,11 +171,17 @@ async function api(req, res, url) {
     if (isNaN(when) || when.getTime() < Date.now() - 5 * 60e3) throw new HttpError(400, 'Please choose a pickup time in the future');
     if (when.getTime() > Date.now() + 365 * 86400e3) throw new HttpError(400, 'Pickup time is too far ahead');
     const ref = newRef();
-    const info = db.prepare(`INSERT INTO bookings (ref,name,phone,email,pickup,dropoff,pickup_at,passengers,notes) VALUES (?,?,?,?,?,?,?,?,?)`)
-      .run(ref, name, phone, email || null, pickup, dropoff, when.toISOString(), passengers, notes || null);
+    const coord = (lat, lng) => { // optional map pin; both values must be valid or both are dropped
+      const a = Number(lat), o = Number(lng);
+      return lat != null && lng != null && lat !== '' && lng !== '' && Math.abs(a) <= 90 && Math.abs(o) <= 180 ? [a, o] : [null, null];
+    };
+    const [pla, plo] = coord(b.pickup_lat, b.pickup_lng), [dla, dlo] = coord(b.drop_lat, b.drop_lng);
+    const info = db.prepare(`INSERT INTO bookings (ref,name,phone,email,pickup,dropoff,pickup_at,passengers,notes,pickup_lat,pickup_lng,drop_lat,drop_lng) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(ref, name, phone, email || null, pickup, dropoff, when.toISOString(), passengers, notes || null, pla, plo, dla, dlo);
     const row = db.prepare('SELECT * FROM bookings WHERE id=?').get(info.lastInsertRowid);
     broadcast('booking', row);
-    telegram(`🚖 New booking ${ref}\n${name} (${phone})\n${pickup} → ${dropoff}\n${fmtWhen(row.pickup_at)} • ${passengers} pax${notes ? '\nNote: ' + notes : ''}`);
+    const pin = (la, lo) => (la != null ? `https://www.google.com/maps/search/?api=1&query=${la},${lo}` : '');
+    telegram(`🚖 New booking ${ref}\n${name} (${phone})\n${pickup} → ${dropoff}\n${fmtWhen(row.pickup_at)} • ${passengers} pax${notes ? '\nNote: ' + notes : ''}${row.pickup_lat != null ? '\nPickup map: ' + pin(row.pickup_lat, row.pickup_lng) : ''}${row.drop_lat != null ? '\nDrop map: ' + pin(row.drop_lat, row.drop_lng) : ''}`);
     return send(res, 201, publicBooking(row));
   }
 

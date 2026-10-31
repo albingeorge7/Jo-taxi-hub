@@ -7,7 +7,8 @@
 <meta name="description" content="JO Taxi Cab – airport pickup &amp; drop, city rides and outstation trips in Cochin, Kerala. 24/7 service.">
 <title>JO Taxi Cab – Book a Ride</title>
 <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/style.css?v=4">
+<link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="/style.css?v=5">
 </head>
 <body>
 <header class="site"><div class="wrap">
@@ -72,8 +73,8 @@
           <label>Your name<span class="field"><svg class="ic"><use href="/img/icons.svg#user"/></svg><input name="name" required autocomplete="name"></span></label>
           <label>Phone<span class="field"><svg class="ic"><use href="/img/icons.svg#phone"/></svg><input name="phone" type="tel" required autocomplete="tel" placeholder="+91 …"></span></label>
         </div>
-        <label>Pickup location<span class="field"><svg class="ic"><use href="/img/icons.svg#pin"/></svg><input name="pickup" required placeholder="e.g. Cochin Airport"></span></label>
-        <label>Drop location<span class="field"><svg class="ic"><use href="/img/icons.svg#route"/></svg><input name="dropoff" required></span></label>
+        <label>Pickup location<span class="field"><svg class="ic"><use href="/img/icons.svg#pin"/></svg><input name="pickup" required placeholder="Type, or tap Map to choose" data-loc="pickup"><button type="button" class="pickbtn" data-pick="pickup"><svg class="ic"><use href="/img/icons.svg#pin"/></svg>Map</button></span><span class="pinned hidden" data-pinned="pickup"><svg class="ic"><use href="/img/icons.svg#check"/></svg>Pinned on map – the driver can open it in Google Maps</span><input type="hidden" name="pickup_lat"><input type="hidden" name="pickup_lng"></label>
+        <label>Drop location<span class="field"><svg class="ic"><use href="/img/icons.svg#route"/></svg><input name="dropoff" required placeholder="Type, or tap Map to choose" data-loc="drop"><button type="button" class="pickbtn" data-pick="drop"><svg class="ic"><use href="/img/icons.svg#pin"/></svg>Map</button></span><span class="pinned hidden" data-pinned="drop"><svg class="ic"><use href="/img/icons.svg#check"/></svg>Pinned on map – the driver can open it in Google Maps</span><input type="hidden" name="drop_lat"><input type="hidden" name="drop_lng"></label>
         <div class="row">
           <label>Pickup date &amp; time<input name="when" type="datetime-local" required></label>
           <label>Passengers<span class="field"><svg class="ic"><use href="/img/icons.svg#users"/></svg><input name="passengers" type="number" min="1" max="20" value="1"></span></label>
@@ -101,6 +102,17 @@
   <div id="trackMsg"></div>
 </div></section>
 
+<dialog id="mapDlg">
+  <div class="map-head"><h3 id="mapTitle">Choose location</h3><button type="button" class="btn sm sec" id="mapClose"><svg class="ic"><use href="/img/icons.svg#x"/></svg>Close</button></div>
+  <form id="mapSearch" class="map-search"><input id="mapQ" placeholder="Search a place, area or landmark" autocomplete="off"><button class="btn navy sm"><svg class="ic"><use href="/img/icons.svg#search"/></svg>Search</button></form>
+  <ul id="mapResults" class="map-results hidden"></ul>
+  <button type="button" class="btn sec sm" id="mapLocate" style="margin:8px 0"><svg class="ic"><use href="/img/icons.svg#pin"/></svg>Use my current location</button>
+  <div id="map"></div>
+  <div id="mapPicked" class="muted" style="margin:8px 0;font-size:14px">Tap the map to drop a pin, or search above.</div>
+  <button type="button" class="btn block" id="mapOk" disabled><svg class="ic"><use href="/img/icons.svg#check"/></svg>Confirm location</button>
+  <div style="font-size:11px;color:var(--muted);margin-top:6px">Map data © OpenStreetMap contributors</div>
+</dialog>
+
 <footer>
   <div class="logo" id="footLogo"><span class="logo-jo">JO</span><span class="logo-t">Taxi Cab</span></div>
   <div id="foot-name" style="margin-top:4px"></div>
@@ -108,6 +120,6 @@
   <div style="opacity:.6" id="foot-copy"></div>
 </footer>
 <a class="fab hidden" id="wa" href="#" target="_blank" rel="noopener"><svg class="ic"><use href="/img/icons.svg#whatsapp"/></svg>WhatsApp</a>
-<script src="/app.js?v=4"></script>
+<script src="/app.js?v=5"></script>
 </body>
 </html>

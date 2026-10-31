@@ -16,6 +16,9 @@ DRIVER_ADDRESS="12 Main Rd, Kochi" npm start
 - **Analytics** – revenue (today/month/total), average fare, completion rate, repeat customers, 30-day charts, busiest hours, top routes.
 - **Bills** – "Complete & bill" builds an itemised bill (base fare, km, tolls…, tax %). It's saved at a private link `/bill/<token>` (print / save as PDF). A "Send bill on WhatsApp" button opens WhatsApp with the customer's number and the bill link ready to send. The red floating **New bill** button creates a bill for rides not booked on the site. Fares can be *per km + extras (toll, parking…)* or a *fixed amount*.
 
+## Location picker
+Customers can type a place or tap **Map** next to pickup/drop: search a place, tap the map, or use their current location. The driver gets **Pickup / Drop / Route** buttons on each ride that open Google Maps (or the phone's maps app) at the exact pin. Uses OpenStreetMap + Leaflet (bundled in `public/vendor`), no API key. Set `MAP_CENTER=lat,lng` (default Kochi) and `COUNTRY_ISO` (default `in`).
+
 ## Configuration (env vars, see `config.js`)
 `BUSINESS_NAME, DRIVER_NAME, DRIVER_PHONE, DRIVER_WHATSAPP, DRIVER_ADDRESS, VEHICLE, CAB_NUMBER, RATE_PER_KM, BASE_FARE, TAX_PERCENT, CURRENCY, TIMEZONE, BASE_URL, PORT, DATA_DIR`
 

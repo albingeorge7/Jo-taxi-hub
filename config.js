@@ -6,6 +6,8 @@ export default {
   baseUrl: env.BASE_URL || '',            // public URL, used in bill links e.g. https://mycab.example.com
   timezone: env.TIMEZONE || 'Asia/Kolkata',
   currency: env.CURRENCY || '₹',
+  mapCenter: (env.MAP_CENTER || '9.9312,76.2673').split(',').map(Number), // [lat, lng] where the map opens (Kochi)
+  countryIso: env.COUNTRY_ISO || 'in',   // limits place search to this country
   countryCode: env.COUNTRY_CODE || '91', // added to 10-digit numbers for WhatsApp links
   business: {
     name: env.BUSINESS_NAME || 'JO Taxi Cab',

@@ -109,3 +109,16 @@ footer{background:var(--navy-d);color:#cbd5e1;padding:34px 18px 26px;text-align:
 footer .logo{font-size:44px;align-items:center;margin-bottom:10px}footer .logo-t{-webkit-text-stroke:.07em #fff}
 footer a{color:#fff;text-decoration:none}footer .links{display:flex;flex-wrap:wrap;gap:8px 22px;justify-content:center;margin:12px 0}
 .fab{position:fixed;right:16px;bottom:16px;background:#22c55e;color:#fff;border-radius:99px;padding:13px 18px;text-decoration:none;font-weight:600;box-shadow:0 8px 20px rgba(22,163,74,.4);z-index:20;display:flex;gap:8px;align-items:center}
+
+/* location picker */
+.field .pickbtn{position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;gap:5px;align-items:center;border:0;background:#e8eefb;color:var(--navy);font:inherit;font-weight:600;font-size:13px;padding:6px 10px;border-radius:8px;cursor:pointer}
+.field .pickbtn .ic{position:static;transform:none;color:var(--red);width:1em;height:1em}
+.field input[data-loc]{padding-right:76px}
+.pinned{display:flex;gap:6px;align-items:center;color:var(--green);font-size:12.5px;font-weight:600;margin-top:5px}
+#mapDlg{border:0;border-radius:18px;padding:16px;width:min(620px,96vw);max-height:94vh;box-shadow:0 24px 60px rgba(0,0,0,.35)}
+#mapDlg::backdrop{background:rgba(11,31,74,.55)}
+.map-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.map-head h3{margin:0;color:var(--navy)}
+.map-search{display:flex;gap:8px}.map-search input{flex:1}
+.map-results{list-style:none;margin:6px 0 0;padding:0;border:1px solid var(--line);border-radius:10px;max-height:150px;overflow:auto}
+.map-results li{padding:9px 12px;font-size:14px;cursor:pointer;border-bottom:1px solid var(--line)}.map-results li:last-child{border:0}.map-results li:hover{background:#f1f5f9}
+#map{height:min(360px,48vh);border-radius:12px;border:1px solid var(--line);z-index:0}

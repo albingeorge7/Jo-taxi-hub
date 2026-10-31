@@ -27,7 +27,7 @@ const sse = await fetch(base + '/api/driver/events', { headers: { Cookie: cookie
 const reader = sse.body.getReader(); let seen = '';
 const gotAlert = (async () => { for (;;) { const { value } = await reader.read(); seen += Buffer.from(value); if (seen.includes('event: booking')) return; } })();
 
-const bk = await j('/api/bookings', 'POST', { name: '<b>Asha</b>', phone: '+91 98765 43210', email: 'a@x.com', pickup: 'Airport', dropoff: 'Hotel', pickup_at: when, passengers: 2 });
+const bk = await j('/api/bookings', 'POST', { name: '<b>Asha</b>', phone: '+91 98765 43210', email: 'a@x.com', pickup: 'Airport', dropoff: 'Hotel', pickup_at: when, passengers: 2, pickup_lat: '10.1520', pickup_lng: '76.4019', drop_lat: 'abc', drop_lng: '76.3' });
 assert.equal(bk.status, 201);
 await gotAlert; ac.abort();
 
@@ -37,6 +37,8 @@ assert.equal((await j('/api/track', 'POST', { ref: bk.data.ref, phone: '98765432
 const list = (await j('/api/driver/bookings', 'GET', null, cookie)).data;
 assert.equal(list.length, 1);
 const id = list[0].id;
+assert.equal(list[0].pickup_lat, 10.152); assert.equal(list[0].pickup_lng, 76.4019);
+assert.equal(list[0].drop_lat, null, 'invalid drop coords dropped'); assert.equal(list[0].drop_lng, null);
 assert.equal((await j(`/api/driver/bookings/${id}`, 'PATCH', { status: 'confirmed' }, cookie)).data.status, 'confirmed');
 
 const bill = await j('/api/driver/bills', 'POST', { booking_id: id, tax_percent: 5, items: [{ description: 'Base', qty: 1, rate: 50 }, { description: 'Distance', qty: 10, rate: 14 }] }, cookie);
