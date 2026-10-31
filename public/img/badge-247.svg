@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+<g fill="#f0285a">
+<circle cx="100" cy="106" r="54"/>
+<path d="M100 178A72 72 0 1 1 118.6 36.4" fill="none" stroke="#f0285a" stroke-width="10" stroke-linecap="round"/>
+<path d="M112.5 51.5 120 22l24 21z"/>
+<path d="M168 70a72 72 0 0 1-10 76" fill="none" stroke="#f0285a" stroke-width="5" stroke-linecap="round" opacity=".85"/>
+</g>
+<text x="100" y="112" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-weight="800" font-size="36" fill="#fff">24/7</text>
+<text x="100" y="132" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-weight="700" font-size="12" letter-spacing="1" fill="#fff">SERVICE</text>
+</svg>

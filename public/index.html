@@ -3,59 +3,112 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#111827">
-<title>Cab Rental – Book a Ride</title>
+<meta name="theme-color" content="#12306b">
+<meta name="description" content="JO Taxi Cab – airport pickup &amp; drop, city rides and outstation trips in Cochin, Kerala. 24/7 service.">
+<title>JO Taxi Cab – Book a Ride</title>
+<link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-<header class="site"><div class="wrap"><b id="brand">🚖 Cab</b><nav><a href="#about">Details</a><a href="#book">Book</a><a href="#track">Track</a></nav></div></header>
+<header class="site"><div class="wrap">
+  <a class="logo" href="#top" id="logoMini"><span class="logo-jo">JO</span><span class="logo-t">Taxi Cab</span></a>
+  <nav><a href="#services">Services</a><a href="#contact">Contact</a><a href="#book">Book</a><a href="#track">Track</a><a class="cta" id="navCall" href="#"><svg class="ic"><use href="/img/icons.svg#phone"/></svg>Call</a></nav>
+</div></header>
 
-<div class="hero"><div class="wrap">
-  <h1 id="h-name">Cab Rental</h1><p id="h-tag"></p>
-  <a class="btn" href="#book">Book a ride</a>
-  <a class="btn sec" id="h-call" href="#">📞 Call driver</a>
+<div class="hero" id="top">
+  <div class="hero-car" role="img" aria-label="Taxi at the airport"></div>
+  <img class="badge247" src="/img/badge-247.svg" alt="24/7 service">
+  <div class="wrap">
+    <div class="hero-phones">
+      <span class="driver" id="h-driver">Driver</span>
+      <a id="h-call" href="#"><span class="dot call"><svg class="ic"><use href="/img/icons.svg#phone"/></svg></span><span id="h-callno"></span></a>
+      <a id="h-wa" href="#" target="_blank" rel="noopener"><span class="dot wa"><svg class="ic"><use href="/img/icons.svg#whatsapp"/></svg></span><span id="h-wano"></span></a>
+    </div>
+    <div class="logo" id="heroLogo"><span class="logo-jo">JO</span><span class="logo-t">Taxi Cab</span></div>
+    <h1 id="h-tag">Airport pickup<br>&amp; drop available</h1>
+    <div class="hero-ctas">
+      <a class="btn" href="#book"><svg class="ic"><use href="/img/icons.svg#calendar"/></svg>Book a ride</a>
+      <a class="btn sec" href="#track"><svg class="ic"><use href="/img/icons.svg#search"/></svg>Track booking</a>
+    </div>
+  </div>
+</div>
+<div class="infobar"><div class="wrap">
+  <span><svg class="ic"><use href="/img/icons.svg#pin"/></svg><span id="ib-loc">Cochin, Kerala</span></span><span class="sep">|</span>
+  <span><svg class="ic"><use href="/img/icons.svg#car"/></svg><span id="ib-veh">All types of vehicles available</span></span><span class="sep">|</span>
+  <span><svg class="ic"><use href="/img/icons.svg#clock"/></svg><span id="ib-hrs">24/7 service</span></span>
 </div></div>
 
-<section id="about"><div class="wrap">
-  <h2>Driver &amp; service details</h2>
+<section id="services"><div class="wrap">
+  <div class="eyebrow">What we offer</div><h2>Our services</h2>
+  <p class="lead">Comfortable, punctual rides with a friendly local driver.</p>
+  <div class="grid" id="areas"></div>
+  <div class="rates"><svg class="ic"><use href="/img/icons.svg#rupee"/></svg><span id="rates"></span></div>
+</div></section>
+
+<section id="contact"><div class="wrap">
+  <div class="eyebrow">Get in touch</div><h2>Driver &amp; contact details</h2>
+  <p class="lead">Call or message any time.</p>
   <div class="grid" id="details"></div>
-  <h2 style="margin-top:24px">Services</h2>
-  <div class="chips" id="areas"></div>
-  <p style="margin-top:20px"><strong>Rates:</strong> <span id="rates"></span></p>
 </div></section>
 
-<section id="book" style="background:#fff"><div class="wrap" style="max-width:640px">
-  <h2>Book a ride</h2>
-  <form id="bookForm" novalidate>
-    <div class="row">
-      <label>Your name<input name="name" required autocomplete="name"></label>
-      <label>Phone<input name="phone" type="tel" required autocomplete="tel" placeholder="+91 …"></label>
-    </div>
-    <label>Email (to receive your bill)<input name="email" type="email" autocomplete="email"></label>
-    <label>Pickup location<input name="pickup" required></label>
-    <label>Drop location<input name="dropoff" required></label>
-    <div class="row">
-      <label>Pickup date &amp; time<input name="when" type="datetime-local" required></label>
-      <label>Passengers<input name="passengers" type="number" min="1" max="20" value="1"></label>
-    </div>
-    <label>Notes (luggage, flight no., etc.)<textarea name="notes" rows="2"></textarea></label>
-    <button class="btn block" id="bookBtn">Request booking</button>
-  </form>
-  <div id="bookMsg"></div>
+<section class="alt"><div class="wrap why">
+  <div class="eyebrow">Why choose us</div><h2>Ride with confidence</h2><p class="lead"></p>
+  <div class="grid">
+    <div class="card icon-card"><div class="ico"><svg class="ic"><use href="/img/icons.svg#clock"/></svg></div><div><h3>Always available</h3><p>24/7 service, day and night.</p></div></div>
+    <div class="card icon-card"><div class="ico"><svg class="ic"><use href="/img/icons.svg#plane"/></svg></div><div><h3>Airport specialist</h3><p>On-time pickup &amp; drop.</p></div></div>
+    <div class="card icon-card"><div class="ico"><svg class="ic"><use href="/img/icons.svg#receipt"/></svg></div><div><h3>Clear billing</h3><p>Itemised bill sent to you.</p></div></div>
+    <div class="card icon-card"><div class="ico"><svg class="ic"><use href="/img/icons.svg#shield"/></svg></div><div><h3>Safe &amp; clean</h3><p>Well-kept vehicles of all types.</p></div></div>
+  </div>
 </div></section>
 
-<section id="track"><div class="wrap" style="max-width:640px">
-  <h2>Check booking status</h2>
-  <form id="trackForm" class="row">
-    <label>Booking reference<input name="ref" required placeholder="CAB…" autocapitalize="characters"></label>
-    <label>Phone used for booking<input name="phone" type="tel" required></label>
-    <button class="btn" style="grid-column:1/-1">Check status</button>
+<section id="book"><div class="wrap">
+  <div class="eyebrow">Reserve</div><h2>Book a ride</h2>
+  <p class="lead">Fill in your trip details. The driver will confirm shortly by call or message.</p>
+  <div class="book-grid">
+    <div>
+      <div class="card">
+      <form id="bookForm" novalidate>
+        <div class="row">
+          <label>Your name<span class="field"><svg class="ic"><use href="/img/icons.svg#user"/></svg><input name="name" required autocomplete="name"></span></label>
+          <label>Phone<span class="field"><svg class="ic"><use href="/img/icons.svg#phone"/></svg><input name="phone" type="tel" required autocomplete="tel" placeholder="+91 …"></span></label>
+        </div>
+        <label>Email <span style="font-weight:400;color:var(--muted)">(to receive your bill)</span><span class="field"><svg class="ic"><use href="/img/icons.svg#mail"/></svg><input name="email" type="email" autocomplete="email"></span></label>
+        <label>Pickup location<span class="field"><svg class="ic"><use href="/img/icons.svg#pin"/></svg><input name="pickup" required placeholder="e.g. Cochin Airport"></span></label>
+        <label>Drop location<span class="field"><svg class="ic"><use href="/img/icons.svg#route"/></svg><input name="dropoff" required></span></label>
+        <div class="row">
+          <label>Pickup date &amp; time<input name="when" type="datetime-local" required></label>
+          <label>Passengers<span class="field"><svg class="ic"><use href="/img/icons.svg#users"/></svg><input name="passengers" type="number" min="1" max="20" value="1"></span></label>
+        </div>
+        <label>Notes <span style="font-weight:400;color:var(--muted)">(luggage, flight no.)</span><span class="field ta"><svg class="ic"><use href="/img/icons.svg#note"/></svg><textarea name="notes" rows="2"></textarea></span></label>
+        <button class="btn block" id="bookBtn"><svg class="ic"><use href="/img/icons.svg#send"/></svg>Request booking</button>
+      </form>
+      <div id="bookMsg"></div>
+      </div>
+    </div>
+    <aside class="book-side"><div>
+      <h3>Airport pickup &amp; drop</h3>
+      <ul><li><svg class="ic"><use href="/img/icons.svg#check"/></svg>Flight-time friendly pickups</li><li><svg class="ic"><use href="/img/icons.svg#check"/></svg>All types of vehicles</li><li><svg class="ic"><use href="/img/icons.svg#check"/></svg>Bill sent to your phone or email</li></ul>
+    </div></aside>
+  </div>
+</div></section>
+
+<section id="track" class="alt"><div class="wrap" style="max-width:660px">
+  <div class="eyebrow">Already booked?</div><h2>Check booking status</h2>
+  <form id="trackForm" class="row" style="margin-top:14px">
+    <label>Booking reference<span class="field"><svg class="ic"><use href="/img/icons.svg#receipt"/></svg><input name="ref" required placeholder="CAB…" autocapitalize="characters"></span></label>
+    <label>Phone used for booking<span class="field"><svg class="ic"><use href="/img/icons.svg#phone"/></svg><input name="phone" type="tel" required></span></label>
+    <button class="btn navy" style="grid-column:1/-1"><svg class="ic"><use href="/img/icons.svg#search"/></svg>Check status</button>
   </form>
   <div id="trackMsg"></div>
 </div></section>
 
-<footer id="foot"></footer>
-<a class="fab hidden" id="wa" href="#" target="_blank" rel="noopener">💬 WhatsApp</a>
+<footer>
+  <div class="logo" id="footLogo"><span class="logo-jo">JO</span><span class="logo-t">Taxi Cab</span></div>
+  <div id="foot-name" style="margin-top:4px"></div>
+  <div class="links" id="foot-links"></div>
+  <div style="opacity:.6" id="foot-copy"></div>
+</footer>
+<a class="fab hidden" id="wa" href="#" target="_blank" rel="noopener"><svg class="ic"><use href="/img/icons.svg#whatsapp"/></svg>WhatsApp</a>
 <script src="/app.js"></script>
 </body>
 </html>

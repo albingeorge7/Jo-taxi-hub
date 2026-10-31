@@ -16,10 +16,10 @@ export function renderBill(bill, booking, { email = false } = {}) {
 <style>
 body{font-family:system-ui,Segoe UI,Arial,sans-serif;background:#f3f4f6;margin:0;padding:16px;color:#111827}
 .sheet{max-width:720px;margin:0 auto;background:#fff;border-radius:12px;padding:24px;box-shadow:0 2px 12px rgba(0,0,0,.08)}
-h1{margin:0;font-size:22px;color:#b45309}.top{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:2px solid #fbbf24;padding-bottom:12px}
+h1{margin:0;font-size:22px;color:#e11d2a}.top{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:2px solid #12306b;padding-bottom:12px}
 .muted{color:#6b7280;font-size:14px}table{width:100%;border-collapse:collapse;margin:16px 0}th,td{padding:8px;border-bottom:1px solid #e5e7eb;text-align:left;font-size:14px}
 .r{text-align:right}.tot td{font-weight:700;border:0}.grand td{font-size:18px;border-top:2px solid #111827}
-.btn{display:inline-block;margin-top:12px;padding:10px 16px;background:#f59e0b;border:0;border-radius:8px;font-weight:600;cursor:pointer}
+.btn{display:inline-block;margin-top:12px;padding:10px 16px;background:#e11d2a;color:#fff;border:0;border-radius:8px;font-weight:600;cursor:pointer}
 @media print{body{background:#fff;padding:0}.sheet{box-shadow:none}.btn{display:none}}
 </style></head><body><div class="sheet">
 <div class="top"><div><h1>${esc(b.name)}</h1><div class="muted">${esc(b.driverName)}<br>${esc(b.address)}<br>${esc(b.phone)}${b.email ? ' • ' + esc(b.email) : ''}${b.licence ? '<br>Vehicle: ' + esc(b.licence) : ''}</div></div>
