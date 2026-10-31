@@ -122,3 +122,6 @@ footer a{color:#fff;text-decoration:none}footer .links{display:flex;flex-wrap:wr
 .map-results{list-style:none;margin:6px 0 0;padding:0;border:1px solid var(--line);border-radius:10px;max-height:150px;overflow:auto}
 .map-results li{padding:9px 12px;font-size:14px;cursor:pointer;border-bottom:1px solid var(--line)}.map-results li:last-child{border:0}.map-results li:hover{background:#f1f5f9}
 #map{height:min(360px,48vh);border-radius:12px;border:1px solid var(--line);z-index:0}
+
+#locDlg{border:0;border-radius:16px;padding:20px;width:min(440px,92vw);box-shadow:0 24px 60px rgba(0,0,0,.4)}#locDlg::backdrop{background:rgba(11,31,74,.6)}
+#locDlg p{margin:0 0 10px;font-size:15px}#locDlg .muted{color:var(--muted);font-size:13.5px}

@@ -8,7 +8,7 @@
 <title>JO Taxi Cab – Book a Ride</title>
 <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
-<link rel="stylesheet" href="/style.css?v=5">
+<link rel="stylesheet" href="/style.css?v=6">
 </head>
 <body>
 <header class="site"><div class="wrap">
@@ -113,6 +113,12 @@
   <div style="font-size:11px;color:var(--muted);margin-top:6px">Map data © OpenStreetMap contributors</div>
 </dialog>
 
+<dialog id="locDlg">
+  <h3 id="locTitle" style="margin:0 0 10px;color:var(--navy);display:flex;gap:8px;align-items:center"><svg class="ic"><use href="/img/icons.svg#pin"/></svg><span></span></h3>
+  <div id="locBody"></div>
+  <div class="actions" style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button type="button" class="btn sec sm" id="locClose">Close</button><button type="button" class="btn sm" id="locRetry"><svg class="ic"><use href="/img/icons.svg#pin"/></svg>Try again</button></div>
+</dialog>
+
 <footer>
   <div class="logo" id="footLogo"><span class="logo-jo">JO</span><span class="logo-t">Taxi Cab</span></div>
   <div id="foot-name" style="margin-top:4px"></div>
@@ -120,6 +126,6 @@
   <div style="opacity:.6" id="foot-copy"></div>
 </footer>
 <a class="fab hidden" id="wa" href="#" target="_blank" rel="noopener"><svg class="ic"><use href="/img/icons.svg#whatsapp"/></svg>WhatsApp</a>
-<script src="/app.js?v=5"></script>
+<script src="/app.js?v=6"></script>
 </body>
 </html>

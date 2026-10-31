@@ -83,8 +83,15 @@ const bookForm = $('#bookForm');
 let leafletReady, map, marker, picking, picked;
 const loadLeaflet = () => leafletReady ||= new Promise((ok, fail) => {
   const s = document.createElement('script'); s.src = '/vendor/leaflet/leaflet.js';
-  s.onload = () => { L.Icon.Default.imagePath = '/vendor/leaflet/images/'; ok(); }; s.onerror = fail; document.head.append(s);
+  s.onload = () => { L.Icon.Default.imagePath = '/vendor/leaflet/images/'; ok(); }; s.onerror = () => { leafletReady = null; s.remove(); fail(new Error('map script failed')); }; document.head.append(s);
 });
+let mapReady;
+const initMap = () => mapReady ||= (async () => {
+  await loadLeaflet();
+  map = L.map('map').setView(info?.mapCenter || [9.9312, 76.2673], 12);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map);
+  map.on('click', (e) => pinFromMap(e.latlng.lat, e.latlng.lng));
+})().catch((e) => { mapReady = null; throw e; });
 const shortName = (n) => n.split(',').slice(0, 3).join(',').trim();
 async function nominatim(path) {
   const r = await fetch('https://nominatim.openstreetmap.org/' + path + '&format=jsonv2&accept-language=en');
@@ -108,12 +115,7 @@ async function openPicker(which) {
   $('#mapTitle').textContent = which === 'pickup' ? 'Choose pickup location' : 'Choose drop location';
   $('#mapOk').disabled = true; $('#mapPicked').textContent = 'Tap the map to drop a pin, or search above.'; $('#mapResults').classList.add('hidden'); $('#mapQ').value = '';
   $('#mapDlg').showModal();
-  try { await loadLeaflet(); } catch { $('#mapPicked').textContent = 'Could not load the map. Please type the address instead.'; return; }
-  if (!map) {
-    map = L.map('map').setView(info?.mapCenter || [9.9312, 76.2673], 12);
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map);
-    map.on('click', (e) => pinFromMap(e.latlng.lat, e.latlng.lng));
-  }
+  try { await initMap(); } catch { $('#mapPicked').textContent = 'Could not load the map. Please type the address instead.'; return; }
   if (marker) { marker.remove(); marker = null; }
   const lat = Number(bookForm[which + '_lat'].value), lng = Number(bookForm[which + '_lng'].value);
   setTimeout(() => { map.invalidateSize(); if (lat && lng) { setPin(lat, lng, bookForm[which === 'pickup' ? 'pickup' : 'dropoff'].value); } }, 50);
@@ -140,17 +142,40 @@ $('#mapSearch').addEventListener('submit', async (e) => {
     res.forEach((r) => { const li = document.createElement('li'); li.textContent = shortName(r.display_name); li.onclick = () => { ul.classList.add('hidden'); setPin(+r.lat, +r.lon, shortName(r.display_name)); }; ul.append(li); });
   } catch (err) { ul.innerHTML = `<li>${esc(err.message)}. You can still tap the map.</li>`; }
 });
-$('#mapLocate').onclick = () => {
-  if (!navigator.geolocation) return ($('#mapPicked').textContent = 'Location is not available on this device.');
-  $('#mapPicked').textContent = 'Getting your location…';
-  navigator.geolocation.getCurrentPosition((p) => pinFromMap(p.coords.latitude, p.coords.longitude), () => ($('#mapPicked').textContent = 'Could not get your location. Please allow location access, or tap the map.'), { enableHighAccuracy: true, timeout: 10000 });
+// ---------- "use my current location" with a clear popup when it cannot work ----------
+const platform = /iphone|ipad|ipod/i.test(navigator.userAgent) ? 'ios' : /android/i.test(navigator.userAgent) ? 'android' : 'desktop';
+const LOC_HELP = {
+  denied: ['Location is turned off', {
+    android: 'Tap the lock icon (or the ⋮ menu) next to the web address, open <b>Permissions</b> or <b>Site settings</b>, set <b>Location</b> to <b>Allow</b>. Also make sure your phone\'s <b>Location (GPS)</b> is switched on.',
+    ios: 'Open <b>Settings → Privacy &amp; Security → Location Services</b> and turn it on, then set <b>Safari Websites</b> to <b>While Using the App</b>. Or tap <b>aA</b> in the address bar → <b>Website Settings → Location → Allow</b>.',
+    desktop: 'Click the lock icon at the left of the address bar, set <b>Location</b> to <b>Allow</b>, then reload the page.' }],
+  secure: ['Location needs a secure page', { all: 'Your browser only shares location on secure (<b>https://</b>) pages. Open this site with an https address, then try again.' }],
+  unsupported: ['Location is not available', { all: 'This browser cannot share your location. Please search for the place or tap the map instead.' }],
+  unavailable: ['We could not find your position', { all: 'Switch on your phone\'s <b>Location (GPS)</b>, move near a window or outdoors and try again. You can also search for the place or tap the map.' }],
 };
-
-// anonymous visit counter: once per browser session (no cookies, no personal data)
-try {
-  if (!sessionStorage.getItem('visited')) {
-    sessionStorage.setItem('visited', '1');
-    fetch('/api/visit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
-      body: JSON.stringify({ ref: document.referrer, src: new URLSearchParams(location.search).get('src') || '' }) }).catch(() => {});
+function locPopup(kind) {
+  const [title, body] = LOC_HELP[kind];
+  $('#locTitle span').textContent = title; $('#locBody').innerHTML = `<p>${body[platform] || body.all}</p><p class="muted">You can still search for the place above, or tap the map to drop a pin.</p>`;
+  $('#locRetry').classList.toggle('hidden', kind === 'secure' || kind === 'unsupported');
+  $('#mapPicked').textContent = 'Could not get your location. Search above or tap the map instead.';
+  if (!$('#locDlg').open) $('#locDlg').showModal();
+}
+async function locate() {
+  if (!window.isSecureContext) return locPopup('secure');
+  if (!navigator.geolocation) return locPopup('unsupported');
+  try { const p = await navigator.permissions?.query({ name: 'geolocation' }); if (p?.state === 'denied') return locPopup('denied'); } catch { /* Permissions API not available */ }
+  $('#mapPicked').textContent = 'Getting your location…';
+  try { await initMap(); } catch { $('#mapPicked').textContent = 'Could not load the map. Please type the address instead.'; return; }
+  const get = (opts) => new Promise((ok, fail) => navigator.geolocation.getCurrentPosition(ok, fail, opts));
+  let pos;
+  try { pos = await get({ enableHighAccuracy: true, timeout: 8000 }); }
+  catch (e) {
+    if (e.code === 1) return locPopup('denied');
+    try { pos = await get({ enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }); }  // slow GPS fix: accept a rougher one
+    catch (e2) { return locPopup(e2.code === 1 ? 'denied' : 'unavailable'); }
   }
-} catch { /* storage blocked: skip counting */ }
+  pinFromMap(pos.coords.latitude, pos.coords.longitude);
+}
+$('#mapLocate').onclick = locate;
+$('#locClose').onclick = () => $('#locDlg').close();
+$('#locRetry').onclick = () => { $('#locDlg').close(); locate(); };
